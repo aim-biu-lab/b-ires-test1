@@ -28,6 +28,7 @@ services:
     restart: always
 
   redis:
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_in_production}
     restart: always
 
   minio:
