@@ -4,7 +4,7 @@
 # This file can be used for unattended/automated installations.
 # Copy this file, fill in your values, and pass it to the installer:
 #
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/bires/main/scripts/install.sh | \
+#   curl -fsSL https://raw.githubusercontent.com/aim-biu-lab/b-ires-test1/master/scripts/install.sh | \
 #       bash -s -- --config /path/to/config.txt --non-interactive
 #
 # All values are optional. The installer will prompt for missing required

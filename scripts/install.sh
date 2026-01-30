@@ -19,8 +19,8 @@ set -e
 readonly INSTALLER_VERSION="1.0.0"
 
 # URLs - Update these with your actual repository URLs
-readonly GITHUB_RAW_BASE="${BIRES_GITHUB_RAW:-https://raw.githubusercontent.com/YOUR_ORG/bires/main}"
-readonly GITHUB_REPO="${BIRES_GITHUB_REPO:-https://github.com/YOUR_ORG/bires.git}"
+readonly GITHUB_RAW_BASE="${BIRES_GITHUB_RAW:-https://raw.githubusercontent.com/aim-biu-lab/b-ires-test1/master}"
+readonly GITHUB_REPO="${BIRES_GITHUB_REPO:-https://github.com/aim-biu-lab/b-ires-test1.git}"
 
 # Installer directory
 readonly INSTALLER_DIR="/tmp/bires-installer"
@@ -142,9 +142,13 @@ check_ubuntu() {
         *)
             log_warning "Ubuntu ${OS_VERSION} is not officially tested."
             log_warning "Supported versions: 20.04, 22.04, 24.04"
-            read -p "Continue anyway? [y/N]: " -r
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
+            if [[ -t 0 ]]; then
+                read -p "Continue anyway? [y/N]: " -r
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    exit 1
+                fi
+            else
+                log_info "Non-interactive mode detected, continuing with unsupported version..."
             fi
             ;;
     esac
@@ -178,10 +182,16 @@ check_memory() {
     elif [[ ${total_mem_gb} -lt 4 ]]; then
         log_warning "Low memory detected (${total_mem_gb}GB). Low-profile mode recommended."
         if [[ "${LOW_PROFILE}" != "true" ]]; then
-            read -p "Enable low-profile mode? [Y/n]: " -r
-            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            if [[ -t 0 ]]; then
+                read -p "Enable low-profile mode? [Y/n]: " -r
+                if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                    LOW_PROFILE="true"
+                    log_info "Low-profile mode enabled."
+                fi
+            else
+                # Non-interactive mode: auto-enable low-profile for low memory
                 LOW_PROFILE="true"
-                log_info "Low-profile mode enabled."
+                log_info "Non-interactive mode: Auto-enabling low-profile mode for low memory."
             fi
         fi
     fi
@@ -196,9 +206,13 @@ check_disk_space() {
     if [[ ${available_gb} -lt 20 ]]; then
         log_warning "Less than 20GB disk space available."
         log_warning "Recommended: 40GB+ for production use."
-        read -p "Continue anyway? [y/N]: " -r
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
+        if [[ -t 0 ]]; then
+            read -p "Continue anyway? [y/N]: " -r
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+        else
+            log_info "Non-interactive mode detected, continuing with low disk space..."
         fi
     fi
 }
