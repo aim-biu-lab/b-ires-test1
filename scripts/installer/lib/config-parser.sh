@@ -33,7 +33,7 @@ parse_config_file() {
     local current_section=""
     
     while IFS= read -r line || [[ -n "${line}" ]]; do
-        ((line_num++))
+        line_num=$((line_num + 1))
         
         # Skip empty lines
         [[ -z "${line}" ]] && continue

@@ -222,7 +222,7 @@ do_verify_installation() {
     
     while ! curl -s http://localhost:19999/api/v1/info &>/dev/null; do
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
             log_warning "Netdata is not responding on port 19999"
             return 0  # Don't fail the module

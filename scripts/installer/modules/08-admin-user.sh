@@ -59,7 +59,7 @@ do_wait_for_backend() {
     
     while ! curl -s http://localhost:8000/health &>/dev/null; do
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
             log_error "Backend not responding after ${max_wait} seconds"
             return 1

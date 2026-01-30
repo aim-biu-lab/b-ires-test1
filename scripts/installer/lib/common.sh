@@ -477,7 +477,7 @@ wait_for_apt() {
             log_info "Waiting for apt lock to be released..."
         fi
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
             log_error "Timeout waiting for apt lock"
             return 1

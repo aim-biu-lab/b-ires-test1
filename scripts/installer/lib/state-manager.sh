@@ -65,7 +65,7 @@ acquire_lock() {
     
     while [[ -f "${STATE_LOCK}" ]]; do
         sleep 0.5
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $((max_wait * 2)) ]]; then
             rm -f "${STATE_LOCK}"
             break
@@ -265,7 +265,7 @@ is_step_done() {
 get_current_step_number() {
     local count=0
     for step in "${STEP_NAMES[@]}"; do
-        ((count++))
+        count=$((count + 1))
         if ! is_step_done "${step}"; then
             echo "${count}"
             return
@@ -279,7 +279,7 @@ get_completed_steps_count() {
     local count=0
     for step in "${STEP_NAMES[@]}"; do
         if is_step_done "${step}"; then
-            ((count++))
+            count=$((count + 1))
         fi
     done
     echo "${count}"

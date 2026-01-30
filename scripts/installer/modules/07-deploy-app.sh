@@ -186,7 +186,7 @@ do_start_infrastructure() {
     local count=0
     while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
             log_error "MongoDB failed to start within ${max_wait} seconds"
             return 1
@@ -198,7 +198,7 @@ do_start_infrastructure() {
     count=0
     while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; do
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge 30 ]]; then
             log_error "Redis failed to start"
             return 1
@@ -210,7 +210,7 @@ do_start_infrastructure() {
     count=0
     while ! docker compose ${COMPOSE_FILES} exec -T minio curl -s http://localhost:9000/minio/health/live &>/dev/null; do
         sleep 2
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge 30 ]]; then
             log_warning "MinIO health check failed, continuing anyway..."
             break
@@ -237,7 +237,7 @@ do_start_application() {
     local count=0
     while ! curl -s http://localhost:8000/health &>/dev/null; do
         sleep 3
-        ((count++))
+        count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
             log_error "Backend failed to start within ${max_wait} seconds"
             docker compose ${COMPOSE_FILES} logs backend
