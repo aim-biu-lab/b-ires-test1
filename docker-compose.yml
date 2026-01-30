@@ -1,0 +1,163 @@
+version: "3.9"
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bires-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=${MONGO_URL:-mongodb://mongo:27017}
+      - MONGO_DB=${MONGO_DB:-bires}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin123}
+      - MINIO_BUCKET=${MINIO_BUCKET:-bires-assets}
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey_change_in_production}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRATION_HOURS=24
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend/app:/app/app
+      - ./themes:/app/themes
+      - ./experiments:/app/experiments
+    depends_on:
+      - mongo
+      - redis
+      - minio
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # Experiment Shell Frontend (Participant-facing)
+  experiment-shell:
+    build:
+      context: ./frontend/experiment-shell
+      dockerfile: Dockerfile
+    container_name: bires-experiment-shell
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/experiment-shell/src:/app/src
+      - ./frontend/experiment-shell/public:/app/public
+    depends_on:
+      - backend
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # Admin Dashboard Frontend
+  admin-dashboard:
+    build:
+      context: ./frontend/admin-dashboard
+      dockerfile: Dockerfile
+    container_name: bires-admin-dashboard
+    ports:
+      - "3001:3001"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/admin-dashboard/src:/app/src
+      - ./frontend/admin-dashboard/public:/app/public
+    depends_on:
+      - backend
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # MongoDB - Primary Database
+  mongo:
+    image: mongo:7
+    container_name: bires-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo/init:/docker-entrypoint-initdb.d
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # Redis - Sessions, Quotas, Caching
+  redis:
+    image: redis:alpine
+    container_name: bires-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # MinIO - Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: bires-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: bires-minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set bires http://minio:9000 minioadmin minioadmin123;
+      mc mb --ignore-existing bires/bires-assets;
+      mc mb --ignore-existing bires/bires-logs;
+      mc anonymous set download bires/bires-assets;
+      exit 0;
+      "
+    networks:
+      - bires-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: bires-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - experiment-shell
+      - admin-dashboard
+    networks:
+      - bires-network
+    restart: unless-stopped
+
+networks:
+  bires-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
+  minio_data:
+

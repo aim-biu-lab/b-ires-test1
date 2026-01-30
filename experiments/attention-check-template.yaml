@@ -1,0 +1,37 @@
+# Attention Check Template
+# Simple attention verification question
+
+meta:
+  id: "attention_check_template"
+  version: "1.0.0"
+  name: "Attention Check"
+  description: "Simple attention verification question"
+  category: "surveys"
+
+stages:
+  - id: "attention_check"
+    type: "attention_check"
+    label: "Verification"
+    title: "Verification"
+    description: "Please answer the following question"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    questions:
+      - id: "verify"
+        text: "To verify you are paying attention, please select 'I am reading carefully'"
+        type: "radio"
+        required: true
+        options:
+          - value: "not_reading"
+            label: "I am not reading carefully"
+          - value: "reading"
+            label: "I am reading carefully"
+          - value: "skipping"
+            label: "I am skipping this question"
+    
+    expected_answer: "reading"
+    failure_message: "Please read the questions carefully before responding."

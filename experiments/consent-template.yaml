@@ -1,0 +1,47 @@
+# Consent Form Template
+# Standard informed consent template
+
+meta:
+  id: "consent_template"
+  version: "1.0.0"
+  name: "Consent Form"
+  description: "Standard informed consent template"
+  category: "forms"
+
+stages:
+  - id: "consent"
+    type: "consent_form"
+    label: "Informed Consent"
+    title: "Research Consent"
+    description: "Please read the information below and agree to participate"
+    mandatory: true
+    editable_after_submit: false
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <h2>Research Study Information</h2>
+      
+      <h3>Purpose</h3>
+      <p>This study aims to understand decision-making processes in everyday situations.</p>
+      
+      <h3>Procedures</h3>
+      <p>You will be asked to complete several questionnaires and view some materials. 
+      The study takes approximately 15-20 minutes.</p>
+      
+      <h3>Risks and Benefits</h3>
+      <p>There are no known risks associated with this study. You will not receive 
+      direct benefits, but your participation contributes to scientific knowledge.</p>
+      
+      <h3>Confidentiality</h3>
+      <p>Your responses will be kept confidential and anonymous. No identifying 
+      information will be collected.</p>
+      
+      <h3>Voluntary Participation</h3>
+      <p>Your participation is voluntary. You may withdraw at any time without penalty.</p>
+      
+      <h3>Contact</h3>
+      <p>For questions, contact the research team at: researcher@example.com</p>

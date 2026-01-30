@@ -1,0 +1,62 @@
+# Multiple Choice Grid Template
+# 4 answers in 2x2 grid layout with explanations
+
+meta:
+  id: "multiple_choice_grid_template"
+  version: "1.0.0"
+  name: "Multiple Choice (2x2 Grid)"
+  description: "4 answers in 2x2 grid layout with explanations"
+  category: "surveys"
+
+stages:
+  - id: "mc_grid_question"
+    type: "multiple_choice"
+    label: "Question"
+    title: "Knowledge Check"
+    description: "Select the best answer"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    question:
+      type: "text"
+      content: "What is the capital of France?"
+      subtext: "Consider European geography"
+
+    explanation_after_submit: |
+      <p><strong>Paris</strong> is the capital and largest city of France.</p>
+
+    answers:
+      - id: "a"
+        type: "text"
+        content: "Paris"
+        explanation: "Paris has been the capital since the 10th century."
+      - id: "b"
+        type: "text"
+        content: "London"
+        explanation: "London is the capital of the United Kingdom."
+      - id: "c"
+        type: "text"
+        content: "Berlin"
+        explanation: "Berlin is the capital of Germany."
+      - id: "d"
+        type: "text"
+        content: "Madrid"
+        explanation: "Madrid is the capital of Spain."
+
+    config:
+      layout: "2x2"
+      correct_answer: "a"
+      allow_multiple_selection: false
+      lock_after_submit: true
+      randomize_order: false
+      show_answer_labels: true
+      label_style: "letter"
+      show_correct_after_submit: true
+      show_explanation_after_submit: true
+      show_answer_explanations: true
+      track_score: false
+      show_score_to_participant: false
+      score_format: "Correct: {{correct}} of {{total}}"

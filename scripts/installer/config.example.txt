@@ -1,0 +1,150 @@
+# =============================================================================
+# B-IRES Platform Installation Configuration
+# =============================================================================
+# This file can be used for unattended/automated installations.
+# Copy this file, fill in your values, and pass it to the installer:
+#
+#   curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/bires/main/scripts/install.sh | \
+#       bash -s -- --config /path/to/config.txt --non-interactive
+#
+# All values are optional. The installer will prompt for missing required
+# values in interactive mode, or use defaults in non-interactive mode.
+# =============================================================================
+
+# =============================================================================
+# Server Security
+# =============================================================================
+# Whether to perform security hardening (user creation, SSH, fail2ban)
+SETUP_SECURITY=yes
+
+# Username for the system user that will run B-IRES
+# This user will have sudo access and own the project files
+CREATE_USER=bires
+
+# SSH public key to add to authorized_keys for the new user
+# If not provided, keys will be copied from root user
+# SSH_PUBLIC_KEY=ssh-ed25519 AAAA... user@example.com
+
+# Disable root SSH login (recommended)
+DISABLE_ROOT_LOGIN=yes
+
+# Disable SSH password authentication (key-only access, recommended)
+DISABLE_PASSWORD_AUTH=yes
+
+# System timezone (default: UTC)
+# TIMEZONE=UTC
+
+# Custom hostname (optional, will be derived from domain if not set)
+# HOSTNAME=bires-production
+
+# =============================================================================
+# Domain & SSL
+# =============================================================================
+# Your domain name (REQUIRED for production)
+# Make sure DNS is configured to point to this server's IP
+DOMAIN=bires-study.com
+
+# Whether to set up SSL certificates via Let's Encrypt
+SETUP_SSL=yes
+
+# Email address for SSL certificate notifications
+# Also used as the admin email if ADMIN_EMAIL is not set
+SSL_EMAIL=admin@example.com
+
+# =============================================================================
+# Admin User
+# =============================================================================
+# Email address for the B-IRES admin user
+ADMIN_EMAIL=admin@example.com
+
+# Username for the B-IRES admin user
+ADMIN_USERNAME=admin
+
+# Password for the admin user (leave empty to auto-generate)
+# If auto-generated, it will be saved to ~/bires-credentials.txt
+ADMIN_PASSWORD=
+
+# =============================================================================
+# Passwords & Secrets
+# =============================================================================
+# Whether to auto-generate all passwords (recommended)
+AUTO_GENERATE_PASSWORDS=yes
+
+# If not auto-generating, provide values below:
+# (These should be long, random strings)
+
+# JWT secret for API authentication (64 characters recommended)
+JWT_SECRET=
+
+# MongoDB password (32 characters recommended)
+MONGO_PASSWORD=
+
+# Redis password (32 characters recommended)
+REDIS_PASSWORD=
+
+# MinIO secret key (32 characters recommended)
+MINIO_SECRET_KEY=
+
+# =============================================================================
+# Database & Storage
+# =============================================================================
+# MongoDB username (default: bires_admin)
+MONGO_USER=bires_admin
+
+# MinIO access key (default: bires_minio_admin)
+MINIO_ACCESS_KEY=bires_minio_admin
+
+# =============================================================================
+# Deployment
+# =============================================================================
+# GitHub repository URL for B-IRES
+# Change this to your fork if you have custom modifications
+GITHUB_REPO=https://github.com/YOUR_ORG/bires.git
+
+# Low profile mode for servers with 2GB RAM or less
+# Enables sequential builds and reduced resource usage
+LOW_PROFILE_MODE=no
+
+# =============================================================================
+# Monitoring
+# =============================================================================
+# Whether to install Netdata for server monitoring
+INSTALL_NETDATA=yes
+
+# Netdata Cloud claim token (optional, for cloud integration)
+# Get this from your Netdata Cloud dashboard
+# NETDATA_CLAIM_TOKEN=
+# NETDATA_CLAIM_ROOMS=
+
+# =============================================================================
+# Firewall
+# =============================================================================
+# Whether to configure UFW firewall
+SETUP_FIREWALL=yes
+
+# Additional ports to allow (comma-separated)
+# Example: ADDITIONAL_PORTS=8080/tcp,9090/tcp
+ADDITIONAL_PORTS=
+
+# =============================================================================
+# Email (Optional)
+# =============================================================================
+# SMTP configuration for email notifications
+# Uncomment and configure if you want email functionality
+
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_USER=noreply@example.com
+# SMTP_PASSWORD=your_email_password
+
+# =============================================================================
+# Advanced Options
+# =============================================================================
+# These are typically not needed for standard installations
+
+# Custom installation directory (default: /home/{CREATE_USER}/bires)
+# INSTALL_DIR=/home/bires/bires
+
+# Skip specific steps (comma-separated list)
+# Options: security,docker,clone,env,ssl,nginx,deploy,admin,firewall,netdata
+# SKIP_STEPS=

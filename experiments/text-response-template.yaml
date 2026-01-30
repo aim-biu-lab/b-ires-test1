@@ -1,0 +1,30 @@
+# Text Response Questionnaire Template
+# Questionnaire with textarea for free-form text responses
+
+meta:
+  id: "text_response_template"
+  version: "1.0.0"
+  name: "Text Response Questionnaire"
+  description: "Questionnaire with textarea for free-form text responses"
+  category: "surveys"
+
+stages:
+  - id: "text_questionnaire"
+    type: "questionnaire"
+    label: "Questionnaire"
+    title: "Questionnaire"
+    description: "Please answer the following questions"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    questions:
+      - id: "q1"
+        text: "Please describe your thoughts about ... (1-2 sentences)."
+        type: "textarea"
+        required: true
+    
+    timing:
+      on_timeout: auto_submit

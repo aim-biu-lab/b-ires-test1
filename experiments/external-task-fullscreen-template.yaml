@@ -1,0 +1,38 @@
+# External Task Fullscreen Template
+# Full-screen external task (e.g., games, simulations)
+
+meta:
+  id: "external_task_fullscreen_template"
+  version: "1.0.0"
+  name: "External Task (Fullscreen)"
+  description: "Full-screen external task (e.g., games, simulations)"
+  category: "tasks"
+
+stages:
+  - id: "fullscreen_task"
+    type: "external_task"
+    label: "Fullscreen Task"
+    title: "Interactive Task"
+    description: "Complete the interactive task"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    target_url: "https://game.example.com/experiment"
+    
+    config:
+      completion_mode: "required"
+      window_mode: "fullscreen"
+      timeout_ms: 600000
+      timeout_action: "prompt"
+      allow_retry_on_timeout: true
+      max_retries: 2
+      enable_reverse_control: true
+      reverse_commands:
+        - restart
+        - close
+      ready_text: "Ready to start"
+      ready_description: ""
+      block_width: "40%"

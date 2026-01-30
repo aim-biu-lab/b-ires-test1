@@ -1,0 +1,54 @@
+# Multiple Choice Basic Template
+# Simple text question with 4 text answers in single column
+
+meta:
+  id: "multiple_choice_basic_template"
+  version: "1.0.0"
+  name: "Multiple Choice (Basic)"
+  description: "Simple text question with 4 text answers in single column"
+  category: "surveys"
+
+stages:
+  - id: "mc_question"
+    type: "multiple_choice"
+    label: "Question"
+    title: "Question"
+    description: "Select the best answer"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    question:
+      type: "text"
+      content: "What is the correct answer?"
+
+    answers:
+      - id: "a"
+        type: "text"
+        content: "Answer A"
+      - id: "b"
+        type: "text"
+        content: "Answer B"
+      - id: "c"
+        type: "text"
+        content: "Answer C"
+      - id: "d"
+        type: "text"
+        content: "Answer D"
+
+    config:
+      layout: "single_column"
+      correct_answer: "a"
+      allow_multiple_selection: false
+      lock_after_submit: true
+      randomize_order: false
+      show_answer_labels: true
+      label_style: "letter"
+      show_correct_after_submit: true
+      show_explanation_after_submit: false
+      show_answer_explanations: false
+      track_score: false
+      show_score_to_participant: false
+      score_format: "Correct: {{correct}} of {{total}}"

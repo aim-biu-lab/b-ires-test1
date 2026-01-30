@@ -1,0 +1,43 @@
+# Instructions Template
+# Task instructions page
+
+meta:
+  id: "instructions_template"
+  version: "1.0.0"
+  name: "Instructions"
+  description: "Task instructions page"
+  category: "content"
+
+stages:
+  - id: "instructions"
+    type: "content_display"
+    label: "Instructions"
+    title: "Instructions"
+    description: "Please read the following instructions carefully"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <h2>Instructions</h2>
+      
+      <p>Please read the following instructions carefully before proceeding.</p>
+      
+      <h3>What You Will Do</h3>
+      <ol>
+        <li>First, you will complete a brief questionnaire</li>
+        <li>Then, you will view some materials</li>
+        <li>Finally, you will answer some questions</li>
+      </ol>
+      
+      <h3>Important Notes</h3>
+      <ul>
+        <li>Please complete this study in a quiet environment</li>
+        <li>Take your time to read each question carefully</li>
+        <li>There are no right or wrong answers</li>
+      </ul>
+      
+      <p><strong>Click "Continue" when you are ready to begin.</strong></p>

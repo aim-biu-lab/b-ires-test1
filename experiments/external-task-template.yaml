@@ -1,0 +1,42 @@
+# External Task Template
+# Launch external web application with WebSocket integration
+
+meta:
+  id: "external_task_template_v1"
+  version: "1.0.0"
+  name: "External Task"
+  description: "Launch external web application with WebSocket integration"
+  category: "tasks"
+
+stages:
+  - id: "external_task"
+    type: "external_task"
+    label: "External Task"
+    title: "Complete External Task"
+    description: "Please complete the task in the external application"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    target_url: "https://external-app.example.com/task"
+    
+    config:
+      button_text: "Open Task"
+      button_open_text: "Task Opened"
+      reopen_button_text: "Reopen Task"
+      completion_mode: "required"
+      window_mode: "popup"
+      window_width: 1200
+      window_height: 800
+      timeout_ms: 0
+      timeout_action: "prompt"
+      allow_retry_on_timeout: true
+      max_retries: 3
+      try_close_on_complete: true
+      waiting_message: "Waiting for task completion..."
+      completed_message: "Task completed successfully!"
+      ready_text: "Ready to start"
+      ready_description: ""  # Optional description above the button
+      block_width: "40%"  # Width of the task block (centered)

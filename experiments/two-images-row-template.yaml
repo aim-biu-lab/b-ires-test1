@@ -1,0 +1,46 @@
+# Two Images in a Row Template
+# Two images displayed side by side
+
+meta:
+  id: "two_images_row_template"
+  version: "1.0.0"
+  name: "Two Images in a Row"
+  description: "Two images displayed side by side"
+  category: "content"
+
+stages:
+  - id: "two_images"
+    type: "content_display"
+    label: "Images"
+    title: "Images"
+    description: ""
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <div style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; padding: 1rem;">
+        <div style="flex: 1; min-width: 280px; max-width: 400px; text-align: center;">
+          <img 
+            src="YOUR_FIRST_IMAGE_URL_HERE" 
+            alt="First image description" 
+            style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+          />
+          <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
+            <em>Caption for first image</em>
+          </p>
+        </div>
+        <div style="flex: 1; min-width: 280px; max-width: 400px; text-align: center;">
+          <img 
+            src="YOUR_SECOND_IMAGE_URL_HERE" 
+            alt="Second image description" 
+            style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+          />
+          <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
+            <em>Caption for second image</em>
+          </p>
+        </div>
+      </div>

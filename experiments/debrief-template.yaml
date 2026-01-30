@@ -1,0 +1,44 @@
+# Debriefing Template
+# Study completion and debriefing page
+
+meta:
+  id: "debrief_template"
+  version: "1.0.0"
+  name: "Debriefing"
+  description: "Study completion and debriefing page"
+  category: "content"
+
+stages:
+  - id: "debrief"
+    type: "content_display"
+    label: "Thank You"
+    title: "Thank You"
+    description: "Study completed - please read the following debriefing"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <h2>Thank You for Participating!</h2>
+      
+      <h3>Debriefing</h3>
+      <p>This study examined [describe the research purpose]. 
+      Your participation helps us better understand [research topic].</p>
+      
+      <h3>What We Were Studying</h3>
+      <p>The purpose of this research was to investigate [specific research questions].</p>
+      
+      <h3>Your Data</h3>
+      <p>Your responses will be kept confidential and used only for research purposes. 
+      No identifying information was collected.</p>
+      
+      <h3>Questions?</h3>
+      <p>If you have any questions about this study, please contact:</p>
+      <p><strong>researcher@example.com</strong></p>
+      
+      <p style="margin-top: 2rem; text-align: center;">
+        <em>You may now close this window.</em>
+      </p>

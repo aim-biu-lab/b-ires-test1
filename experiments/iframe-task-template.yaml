@@ -1,0 +1,28 @@
+# Interactive Task Template
+# Embedded interactive task in iframe
+
+meta:
+  id: "iframe_task_template"
+  version: "1.0.0"
+  name: "Interactive Task"
+  description: "Embedded interactive task in iframe"
+  category: "tasks"
+
+stages:
+  - id: "interactive_task"
+    type: "iframe_sandbox"
+    label: "Interactive Task"
+    title: "Interactive Task"
+    description: "Please complete the following task"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    source: ""
+    
+    config:
+      height: "600px"
+      allow_fullscreen: true
+      completion_trigger: "TASK_COMPLETE"

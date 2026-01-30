@@ -1,0 +1,34 @@
+# Image Block Template
+# Display a single centered image
+
+meta:
+  id: "image_block_template"
+  version: "1.0.0"
+  name: "Image Block"
+  description: "Display a single centered image"
+  category: "content"
+
+stages:
+  - id: "image_display"
+    type: "content_display"
+    label: "Image"
+    title: "Image"
+    description: ""
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <div style="text-align: center; padding: 1rem;">
+        <img 
+          src="YOUR_IMAGE_URL_HERE" 
+          alt="Image description" 
+          style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+        />
+        <p style="margin-top: 0.75rem; color: #666; font-size: 0.9rem;">
+          <em>Image caption (optional)</em>
+        </p>
+      </div>

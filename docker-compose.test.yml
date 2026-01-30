@@ -1,0 +1,41 @@
+version: "3.9"
+
+# Test overrides - HTTP only, no SSL
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+    restart: always
+
+  experiment-shell:
+    build:
+      context: ./frontend/experiment-shell
+      dockerfile: Dockerfile
+    restart: always
+
+  admin-dashboard:
+    build:
+      context: ./frontend/admin-dashboard
+      dockerfile: Dockerfile
+    restart: always
+
+  mongo:
+    restart: always
+
+  redis:
+    restart: always
+
+  minio:
+    restart: always
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.test.conf:/etc/nginx/nginx.conf:ro
+    restart: always
+
+

@@ -1,0 +1,62 @@
+# Demographics Simple Template
+# Basic demographics with age, gender, education
+
+meta:
+  id: "demographics_simple_template"
+  version: "1.0.0"
+  name: "Demographics (Simple)"
+  description: "Basic demographics with age, gender, education"
+  category: "forms"
+
+stages:
+  - id: "demographics"
+    type: "user_info"
+    label: "About You"
+    title: "About You"
+    description: "Please provide some basic information"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    fields:
+      - field: "age"
+        label: "What is your age?"
+        type: "number"
+        required: true
+        min: 18
+        max: 120
+        validation_message: "Please enter a valid age (18-120)"
+      
+      - field: "gender"
+        label: "What is your gender?"
+        type: "select"
+        required: true
+        options:
+          - value: "male"
+            label: "Male"
+          - value: "female"
+            label: "Female"
+          - value: "non_binary"
+            label: "Non-binary"
+          - value: "other"
+            label: "Other"
+          - value: "prefer_not"
+            label: "Prefer not to say"
+      
+      - field: "education"
+        label: "What is your highest level of education?"
+        type: "select"
+        required: true
+        options:
+          - value: "high_school"
+            label: "High School or equivalent"
+          - value: "some_college"
+            label: "Some college"
+          - value: "bachelors"
+            label: "Bachelor's degree"
+          - value: "masters"
+            label: "Master's degree"
+          - value: "doctorate"
+            label: "Doctorate or professional degree"

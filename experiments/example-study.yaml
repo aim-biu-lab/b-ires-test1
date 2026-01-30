@@ -1,0 +1,298 @@
+# Example Study Configuration
+# This is a complete example demonstrating all major B-IRES features
+
+meta:
+  id: "example_study_v1"
+  version: "1.0.0"
+  name: "Example Behavioral Study"
+  description: "A demonstration of B-IRES experiment configuration"
+  # debug_mode: true  # Uncomment to enable debug mode (shows "Debug Fill" button for quick testing)
+
+# Shell appearance configuration
+shell_config:
+  theme: "clinical_blue"
+  
+  branding:
+    title_template: "{{experiment_name}} - {{current_stage}}"
+  
+  layout:
+    max_width: "800px"
+    content_alignment: "center"
+  
+  progress:
+    show_in_title: true
+    show_progress_bar: true
+    progress_bar_position: "top"
+    show_counter: true
+    counter_format: "Step {{current}} of {{total}}"
+  
+  navigation:
+    labels:
+      next: "Continue"
+      back: "Back"
+      submit: "Submit"
+      finish: "Complete Study"
+    allow_back: true
+
+# Public variables (sent to client)
+public_variables:
+  STUDY_NAME: "Behavioral Research Study"
+  RESEARCHER_EMAIL: "researcher@example.com"
+
+stages:
+  # Stage 1: Informed Consent
+  - id: "consent"
+    type: "consent_form"
+    label: "Informed Consent"
+    # Top bar display - shown in the header
+    title: "Research Consent"
+    description: "Please read the information below and agree to participate"
+    mandatory: true
+    editable_after_submit: false
+    
+    content_type: "html"
+    content: |
+      <h2>Research Study Information</h2>
+      
+      <h3>Purpose</h3>
+      <p>This study aims to understand decision-making processes in everyday situations.</p>
+      
+      <h3>Procedures</h3>
+      <p>You will be asked to complete several questionnaires and view some videos. 
+      The study takes approximately 15-20 minutes.</p>
+      
+      <h3>Risks and Benefits</h3>
+      <p>There are no known risks associated with this study. You will not receive 
+      direct benefits, but your participation contributes to scientific knowledge.</p>
+      
+      <h3>Confidentiality</h3>
+      <p>Your responses will be kept confidential and anonymous. No identifying 
+      information will be collected.</p>
+      
+      <h3>Contact</h3>
+      <p>For questions, contact: ${PUBLIC.RESEARCHER_EMAIL}</p>
+
+  # Stage 2: Demographics
+  - id: "demographics"
+    type: "user_info"
+    label: "About You"
+    title: "Tell Us About Yourself"
+    description: "This information helps us understand our participants"
+    mandatory: true
+    editable_after_submit: true
+    invalidates_dependents: true
+    
+    fields:
+      - field: "age"
+        label: "What is your age?"
+        type: "number"
+        required: true
+        min: 18
+        max: 120
+        validation_message: "Please enter a valid age (18-120)"
+      
+      - field: "gender"
+        label: "What is your gender?"
+        type: "select"
+        required: true
+        options:
+          - value: "male"
+            label: "Male"
+          - value: "female"
+            label: "Female"
+          - value: "non_binary"
+            label: "Non-binary"
+          - value: "other"
+            label: "Other"
+          - value: "prefer_not"
+            label: "Prefer not to say"
+      
+      - field: "education"
+        label: "What is your highest level of education?"
+        type: "select"
+        required: true
+        options:
+          - value: "high_school"
+            label: "High School or equivalent"
+          - value: "some_college"
+            label: "Some college"
+          - value: "bachelors"
+            label: "Bachelor's degree"
+          - value: "masters"
+            label: "Master's degree"
+          - value: "doctorate"
+            label: "Doctorate or professional degree"
+
+  # Stage 3: Instructions
+  - id: "instructions"
+    type: "content_display"
+    label: "Task Instructions"
+    title: "Task Instructions"
+    description: "Please read the following instructions carefully before continuing"
+    reference: true
+    reference_label: "View Instructions"
+    editable_after_submit: false
+    
+    content_type: "html"
+    content: |
+      <h2>Task Instructions</h2>
+      
+      <p>In the following section, you will watch a short video and then answer 
+      questions about what you observed.</p>
+      
+      <h3>Important:</h3>
+      <ul>
+        <li>Please watch the video in a quiet environment</li>
+        <li>Pay close attention to the details</li>
+        <li>You cannot rewind or pause the video</li>
+        <li>Answer the questions based on what you remember</li>
+      </ul>
+      
+      <p><strong>Click "Continue" when you are ready to begin.</strong></p>
+
+  # Stage 4: Video Stimulus
+  - id: "video_stimulus"
+    type: "video_player"
+    label: "Video Task"
+    title: "Watch the Video"
+    description: "Please watch the following video carefully. You cannot skip or rewind."
+    mandatory: true
+    
+    source: "asset://example_study_v1/stimulus.mp4"
+    
+    config:
+      autoplay: false
+      controls: true
+      allow_seek: false
+      allow_pause: true
+      log_progress_interval_ms: 5000
+    
+    completion_trigger: "media_ended"
+    
+    timing:
+      max_duration_ms: 300000  # 5 minutes max
+
+  # Stage 5: Post-Video Questions
+  - id: "post_video"
+    type: "questionnaire"
+    label: "Video Questions"
+    title: "Video Questions"
+    description: "Please answer the following questions about the video you just watched"
+    mandatory: true
+    
+    questions:
+      - id: "attention_check"
+        text: "What was shown in the video?"
+        type: "radio"
+        required: true
+        options:
+          - value: "nature"
+            label: "Nature scenes"
+          - value: "people"
+            label: "People interacting"
+          - value: "animals"
+            label: "Animals"
+          - value: "abstract"
+            label: "Abstract patterns"
+      
+      - id: "engagement"
+        text: "How engaged were you while watching the video?"
+        type: "likert_scale"
+        range: [1, 7]
+        required: true
+      
+      - id: "emotional_response"
+        text: "How did the video make you feel?"
+        type: "checkbox"
+        options:
+          - value: "happy"
+            label: "Happy"
+          - value: "sad"
+            label: "Sad"
+          - value: "surprised"
+            label: "Surprised"
+          - value: "neutral"
+            label: "Neutral"
+          - value: "anxious"
+            label: "Anxious"
+          - value: "calm"
+            label: "Calm"
+
+  # Stage 6: Conditional Stage (only for participants who felt anxious)
+  - id: "anxiety_followup"
+    type: "questionnaire"
+    label: "Additional Questions"
+    title: "Follow-up Questions"
+    description: "Please tell us more about your experience"
+    visibility_rule: "post_video.emotional_response contains 'anxious'"
+    
+    questions:
+      - id: "anxiety_intensity"
+        text: "How intense was your feeling of anxiety?"
+        type: "likert_scale"
+        range: [1, 5]
+        required: true
+      
+      - id: "anxiety_reason"
+        text: "What do you think caused this feeling?"
+        type: "textarea"
+        required: false
+
+  # Stage 7: Final Survey
+  - id: "final_survey"
+    type: "questionnaire"
+    label: "Final Questions"
+    title: "Final Questions"
+    description: "Please answer these final questions about your overall experience"
+    mandatory: true
+    
+    questions:
+      - id: "overall_experience"
+        text: "Overall, how would you rate your experience with this study?"
+        type: "likert_scale"
+        range: [1, 5]
+        required: true
+      
+      - id: "technical_issues"
+        text: "Did you experience any technical issues?"
+        type: "radio"
+        required: true
+        options:
+          - value: "no"
+            label: "No issues"
+          - value: "minor"
+            label: "Minor issues"
+          - value: "major"
+            label: "Major issues"
+      
+      - id: "feedback"
+        text: "Any additional feedback? (optional)"
+        type: "textarea"
+        required: false
+
+  # Stage 8: Debriefing
+  - id: "debrief"
+    type: "content_display"
+    label: "Thank You"
+    title: "Thank You"
+    description: "Study completed - please read the following debriefing information"
+    
+    content_type: "html"
+    content: |
+      <h2>Thank You for Participating!</h2>
+      
+      <h3>Debriefing</h3>
+      <p>This study examined how people process visual information and their 
+      emotional responses to different types of stimuli.</p>
+      
+      <p>Your participation helps us better understand human cognition and 
+      decision-making processes.</p>
+      
+      <h3>Questions?</h3>
+      <p>If you have any questions about this study, please contact:</p>
+      <p><strong>${PUBLIC.RESEARCHER_EMAIL}</strong></p>
+      
+      <p style="margin-top: 2rem; text-align: center;">
+        <em>You may now close this window.</em>
+      </p>
+

@@ -1,0 +1,57 @@
+version: "3.9"
+
+# Production overrides - use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+    restart: always
+
+  experiment-shell:
+    build:
+      context: ./frontend/experiment-shell
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${API_URL:-https://api.example.com}
+    restart: always
+
+  admin-dashboard:
+    build:
+      context: ./frontend/admin-dashboard
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${API_URL:-https://api.example.com}
+    restart: always
+
+  mongo:
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-admin}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-change_me_in_production}
+    restart: always
+
+  redis:
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_in_production}
+    restart: always
+
+  minio:
+    environment:
+      - MINIO_ROOT_USER=${MINIO_USER:-admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-change_me_in_production}
+    restart: always
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: always
+
+
+

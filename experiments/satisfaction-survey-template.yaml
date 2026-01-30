@@ -1,0 +1,93 @@
+# Satisfaction Survey Template
+# Likert scale satisfaction questions with custom labels/scores
+
+meta:
+  id: "satisfaction_survey_template"
+  version: "1.0.0"
+  name: "Satisfaction Survey"
+  description: "Likert scale satisfaction questions with custom labels/scores"
+  category: "surveys"
+
+stages:
+  - id: "satisfaction"
+    type: "questionnaire"
+    label: "Satisfaction Survey"
+    title: "Satisfaction Survey"
+    description: "Please rate your experience"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    questions:
+      # Standard likert scale with custom options (labels + hidden scores)
+      - id: "overall_satisfaction"
+        text: "Overall, how satisfied are you with this experience?"
+        type: "likert_scale"
+        required: true
+        show_faces: true
+        show_score: false
+        likert_options:
+          - label: "Strongly Disagree"
+            score: 1
+          - label: "Disagree"
+            score: 2
+          - label: "Neutral"
+            score: 3
+          - label: "Agree"
+            score: 4
+          - label: "Strongly Agree"
+            score: 5
+        style_config:
+          option_gap: 8
+          option_padding: 16
+      
+      # Likert scale with faces and score displayed
+      - id: "ease_of_use"
+        text: "How easy was it to complete the tasks?"
+        type: "likert_scale"
+        required: true
+        show_faces: true
+        show_score: true
+        likert_options:
+          - label: "Very Difficult"
+            score: 1
+          - label: "Difficult"
+            score: 2
+          - label: "Moderate"
+            score: 3
+          - label: "Easy"
+            score: 4
+          - label: "Very Easy"
+            score: 5
+      
+      # Simple range-based likert (backward compatible)
+      - id: "clarity"
+        text: "How clear were the instructions?"
+        type: "likert_scale"
+        range: [1, 5]
+        show_faces: false
+        show_score: true
+        required: true
+      
+      - id: "would_recommend"
+        text: "Would you recommend this to others?"
+        type: "radio"
+        required: true
+        options:
+          - value: "definitely_yes"
+            label: "Definitely yes"
+          - value: "probably_yes"
+            label: "Probably yes"
+          - value: "not_sure"
+            label: "Not sure"
+          - value: "probably_no"
+            label: "Probably no"
+          - value: "definitely_no"
+            label: "Definitely no"
+      
+      - id: "feedback"
+        text: "Any additional feedback? (optional)"
+        type: "textarea"
+        required: false

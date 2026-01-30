@@ -1,0 +1,55 @@
+# Multiple Choice Video Template
+# Video prompt with text answers
+
+meta:
+  id: "multiple_choice_video_template"
+  version: "1.0.0"
+  name: "Multiple Choice (Video Question)"
+  description: "Video prompt with text answers"
+  category: "surveys"
+
+stages:
+  - id: "mc_video_question"
+    type: "multiple_choice"
+    label: "Video Question"
+    title: "Video Question"
+    description: "Watch the video and answer the question"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    question:
+      type: "video"
+      video_url: ""
+      content: "What happened in the video?"
+
+    answers:
+      - id: "a"
+        type: "text"
+        content: "Answer A"
+      - id: "b"
+        type: "text"
+        content: "Answer B"
+      - id: "c"
+        type: "text"
+        content: "Answer C"
+      - id: "d"
+        type: "text"
+        content: "Answer D"
+
+    config:
+      layout: "single_column"
+      correct_answer: "a"
+      allow_multiple_selection: false
+      lock_after_submit: true
+      randomize_order: false
+      show_answer_labels: true
+      label_style: "letter"
+      show_correct_after_submit: true
+      show_explanation_after_submit: false
+      show_answer_explanations: false
+      track_score: false
+      show_score_to_participant: false
+      score_format: "Correct: {{correct}} of {{total}}"

@@ -1,0 +1,197 @@
+# Demographics Template (Full)
+# Complete demographics form with row-based layout
+
+meta:
+  id: "demographics_template_v1"
+  version: "1.0.0"
+  name: "Demographics (Full)"
+  description: "Complete demographics form with row-based layout"
+  category: "forms"
+
+stages:
+  - id: "demographics"
+    type: "user_info"
+    label: "Your info"
+    title: "Tell Us About Yourself"
+    description: "Please fill in your demographic information"
+    mandatory: true
+    editable_after_submit: false
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    fields:
+      # Row 1: Experiment group selector
+      - field: "experiment_group"
+        label: ""
+        type: "select"
+        required: true
+        row: 1
+        width: "third"
+        placeholder: "Select experiment group id"
+        options:
+          - value: "A"
+            label: "A"
+          - value: "B"
+            label: "B"
+          - value: "C"
+            label: "C"
+          - value: "D"
+            label: "D"
+          - value: "E"
+            label: "E"
+
+      # Row 2: Name fields (3 columns)
+      - field: "first_name"
+        label: ""
+        type: "text"
+        required: true
+        row: 2
+        width: "third"
+        placeholder: "First name (english only)"
+        validation: "^[A-Za-z\\s]+$"
+        validation_message: "Please use English characters only"
+
+      - field: "last_name"
+        label: ""
+        type: "text"
+        required: true
+        row: 2
+        width: "third"
+        placeholder: "Second name (english only)"
+        validation: "^[A-Za-z\\s]+$"
+        validation_message: "Please use English characters only"
+
+      - field: "id_number"
+        label: ""
+        type: "text"
+        required: true
+        row: 2
+        width: "third"
+        placeholder: "Id number (teudat zehut)"
+        validation: "^[0-9]+$"
+        validation_message: "Please enter digits only"
+
+      # Row 3: Age and Gender (2 columns)
+      - field: "age"
+        label: ""
+        type: "number"
+        required: true
+        row: 3
+        width: "half"
+        placeholder: "Your age"
+        min: 18
+        max: 120
+        validation_message: "Please enter a valid age (18-120)"
+
+      - field: "gender"
+        label: ""
+        type: "select"
+        required: true
+        row: 3
+        width: "half"
+        placeholder: "Gender"
+        options:
+          - value: "male"
+            label: "Male"
+          - value: "female"
+            label: "Female"
+          - value: "other"
+            label: "Other"
+
+      # Row 4: STEM explanation header
+      - field: "stem_header"
+        type: "header"
+        required: false
+        row: 4
+        width: "full"
+        headerText: "<strong>STEM</strong> = <strong>S</strong>cience, <strong>T</strong>echnology, <strong>E</strong>ngineering and <strong>M</strong>athematics"
+
+      # Row 5: Educational and Professional Background
+      - field: "educational_background"
+        label: ""
+        type: "select"
+        required: true
+        row: 5
+        width: "half"
+        headerText: "Educational Background"
+        placeholder: "What is your educational background?"
+        helpText: "*If you earned a degree in stem field or currently enrolled in a university-level stem program"
+        options:
+          - value: "stem"
+            label: "Stem"
+          - value: "non-stem"
+            label: "Non-stem"
+
+      - field: "professional_background"
+        label: ""
+        type: "select"
+        required: true
+        row: 5
+        width: "half"
+        headerText: "Professional Background"
+        placeholder: "What is your professional background?"
+        options:
+          - value: "stem"
+            label: "Stem"
+          - value: "non-stem"
+            label: "Non-stem"
+
+      # Row 6: AI Experience and Explanation Preferences
+      - field: "ai_experience_years"
+        label: ""
+        type: "select"
+        required: true
+        row: 6
+        width: "half"
+        headerText: "AI Experience"
+        placeholder: "How many years of experience do you have using AI-powered systems?"
+        options:
+          - value: "0-1"
+            label: "Less than 1 year"
+          - value: "1-2"
+            label: "1–2 years"
+          - value: "3-4"
+            label: "3–4 years"
+          - value: "5+"
+            label: "More than 5 years"
+
+      - field: "explanation_type_preference"
+        label: ""
+        type: "select"
+        required: true
+        row: 6
+        width: "half"
+        headerText: "Preferred Explanation Type"
+        placeholder: "Which type of explanation do you prefer?"
+        options:
+          - value: "textual"
+            label: "Textual"
+          - value: "visual"
+            label: "Visual"
+
+      # Row 7: Explanation detail preference
+      - field: "explanation_detail_preference"
+        label: ""
+        type: "select"
+        required: true
+        row: 7
+        width: "half"
+        headerText: "Explanation Content Detail"
+        placeholder: "How much detail do you prefer in an explanation?"
+        options:
+          - value: "brief"
+            label: "Brief"
+          - value: "detailed"
+            label: "Detailed"
+
+      # Row 8: Consent checkbox
+      - field: "participation_consent"
+        label: "I have read the consent form and consent to be a participant in this study and understand that I can refuse to answer questions at any time, without having to give a reason."
+        type: "consent"
+        required: true
+        row: 8
+        width: "full"
+        consentUrl: "./consent_form.html"
+        consentLinkText: "consent form"

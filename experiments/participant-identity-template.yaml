@@ -1,0 +1,61 @@
+# Participant Identity Template
+# Form to collect participant identity that updates their visible label
+
+meta:
+  id: "participant_identity_template_v1"
+  version: "1.0.0"
+  name: "Participant Identity"
+  description: "Form to collect participant identity that updates their visible label"
+  category: "forms"
+
+stages:
+  - id: "participant_identity"
+    type: "participant_identity"
+    label: "Your Identity"
+    title: "Participant Identification"
+    description: "Please enter your details to identify yourself"
+    mandatory: true
+    editable_after_submit: false
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    fields:
+      # Row 1: First and Last Name
+      - field: "first_name"
+        label: ""
+        type: "text"
+        enabled: true
+        required: true
+        include_in_label: true
+        row: 1
+        width: "half"
+        placeholder: "First name"
+        validation: "^[A-Za-z\\s]+$"
+        validation_message: "Please use English characters only"
+
+      - field: "last_name"
+        label: ""
+        type: "text"
+        enabled: true
+        required: false
+        include_in_label: true
+        row: 1
+        width: "half"
+        placeholder: "Last name"
+        validation: "^[A-Za-z\\s]+$"
+        validation_message: "Please use English characters only"
+
+      # Row 2: ID Number (hidden by default)
+      - field: "id_number"
+        label: ""
+        type: "text"
+        enabled: false
+        required: false
+        include_in_label: true
+        row: 2
+        width: "half"
+        placeholder: "ID number"
+        validation: "^[0-9]+$"
+        validation_message: "Please enter digits only"

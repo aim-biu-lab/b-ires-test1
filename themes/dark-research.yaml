@@ -1,0 +1,113 @@
+# Dark Research Theme - Dark mode for reduced eye strain during long sessions
+name: "dark_research"
+description: "Dark mode theme for long research sessions with reduced eye strain"
+
+tokens:
+  colors:
+    primary: "#60a5fa"
+    primary_hover: "#3b82f6"
+    primary_light: "#1e3a5f"
+    secondary: "#94a3b8"
+    secondary_hover: "#cbd5e1"
+    
+    background: "#0f172a"
+    surface: "#1e293b"
+    surface_elevated: "#334155"
+    
+    text_primary: "#f1f5f9"
+    text_secondary: "#94a3b8"
+    text_muted: "#64748b"
+    text_inverse: "#0f172a"
+    
+    border: "#334155"
+    border_focus: "#60a5fa"
+    
+    success: "#4ade80"
+    success_light: "#166534"
+    warning: "#fbbf24"
+    warning_light: "#854d0e"
+    error: "#f87171"
+    error_light: "#991b1b"
+    info: "#60a5fa"
+    info_light: "#1e3a5f"
+    
+  typography:
+    font_heading: "'Inter', system-ui, -apple-system, sans-serif"
+    font_body: "'Inter', system-ui, -apple-system, sans-serif"
+    font_mono: "'JetBrains Mono', 'Fira Code', monospace"
+    
+    size_xs: "0.75rem"
+    size_sm: "0.875rem"
+    size_base: "1rem"
+    size_lg: "1.125rem"
+    size_xl: "1.25rem"
+    size_2xl: "1.5rem"
+    size_3xl: "1.875rem"
+    size_4xl: "2.25rem"
+    
+    weight_normal: "400"
+    weight_medium: "500"
+    weight_semibold: "600"
+    weight_bold: "700"
+    
+    line_height_tight: "1.25"
+    line_height_normal: "1.5"
+    line_height_relaxed: "1.75"
+    
+  spacing:
+    border_radius_sm: "4px"
+    border_radius: "8px"
+    border_radius_lg: "12px"
+    border_radius_xl: "16px"
+    border_radius_full: "9999px"
+    
+    spacing_unit: "4px"
+    spacing_xs: "4px"
+    spacing_sm: "8px"
+    spacing_md: "16px"
+    spacing_lg: "24px"
+    spacing_xl: "32px"
+    spacing_2xl: "48px"
+    
+  shadows:
+    shadow_sm: "0 1px 2px 0 rgb(0 0 0 / 0.3)"
+    shadow: "0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4)"
+    shadow_md: "0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4)"
+    shadow_lg: "0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4)"
+    
+  transitions:
+    duration_fast: "150ms"
+    duration_normal: "200ms"
+    duration_slow: "300ms"
+    easing: "cubic-bezier(0.4, 0, 0.2, 1)"
+
+components:
+  button:
+    primary:
+      background: "var(--color-primary)"
+      color: "var(--color-text-inverse)"
+      hover_background: "var(--color-primary-hover)"
+    secondary:
+      background: "transparent"
+      color: "var(--color-primary)"
+      border: "1px solid var(--color-primary)"
+      hover_background: "var(--color-primary-light)"
+      
+  input:
+    background: "var(--color-surface)"
+    border: "1px solid var(--color-border)"
+    focus_border: "var(--color-border-focus)"
+    focus_ring: "0 0 0 3px var(--color-primary-light)"
+    
+  card:
+    background: "var(--color-surface)"
+    border: "1px solid var(--color-border)"
+    shadow: "var(--shadow)"
+    
+  progress:
+    track: "var(--color-border)"
+    fill: "var(--color-primary)"
+    height: "8px"
+
+
+

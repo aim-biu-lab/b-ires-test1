@@ -1,0 +1,690 @@
+\documentclass[12pt, a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{longtable}
+
+% Color definitions
+\definecolor{primaryblue}{RGB}{31, 78, 121}
+\definecolor{accentgray}{RGB}{89, 89, 89}
+\definecolor{codebg}{RGB}{245, 245, 245}
+\definecolor{codeframe}{RGB}{200, 200, 200}
+
+% Hyperlink styling
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primaryblue,
+    urlcolor=primaryblue,
+    citecolor=primaryblue
+}
+
+% Code listing style
+\lstset{
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false
+}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{accentgray}{\small B-IRES Platform}}
+\fancyhead[R]{\textcolor{accentgray}{\small Platform Overview}}
+\fancyfoot[C]{\thepage}
+
+% Title formatting
+\titleformat{\section}
+{\normalfont\Large\bfseries\color{primaryblue}}{\thesection}{1em}{}
+\titleformat{\subsection}
+{\normalfont\large\bfseries\color{primaryblue}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+{\normalfont\normalsize\bfseries\color{primaryblue}}{\thesubsubsection}{1em}{}
+
+% Document info
+\title{
+    \vspace{-1cm}
+    \textbf{\Huge B-IRES}\\[0.3em]
+    \Large Bar-Ilan Research Evaluation System\\[0.5em]
+    \large A Comprehensive Platform Overview
+}
+\author{B-IRES Development Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The \textbf{Bar-Ilan Research Evaluation System (B-IRES)} is a configuration-driven platform designed to simplify the creation, deployment, and management of multi-modal research trials and human-centric evaluations. Built with researchers in mind, B-IRES enables non-technical users to design sophisticated multi-stage studies through intuitive YAML configuration files, while providing robust data collection, real-time logging, and seamless participant management. 
+
+The platform features a \textbf{backend-authoritative architecture} ensuring data integrity, \textbf{offline-capable participant sessions} with automatic synchronization, \textbf{role-based access control} for collaborative research teams, and a \textbf{pluggable storage system} supporting multiple database backends. Current capabilities include a professional YAML editor with live validation and preview, comprehensive block components for diverse content types, and real-time monitoring dashboards.
+
+Future development roadmap includes a \textbf{Visual Experiment Builder} with drag-and-drop stage ordering, visual flow editing for conditional branching, and one-click YAML generation---enabling researchers with no coding experience to construct complex studies visually. Additionally, enhanced \textbf{Live Monitoring} capabilities will provide active session tracking, real-time quota status, error logging, and advanced analytics including completion rates, response time distributions, and drop-off analysis.
+
+This document presents a high-level overview of the platform's capabilities, features, and potential applications across various research domains.
+\end{abstract}
+
+\vspace{1em}
+\hrule
+\vspace{2em}
+
+%========================================
+\section{Introduction}
+%========================================
+
+Research involving human participants---whether in psychology, cognitive science, human-computer interaction, or social sciences---often requires complex experimental setups involving multiple stages, conditional logic, multimedia content, and detailed data logging. Traditionally, creating such multi-modal research trials demanded significant technical expertise in web development, database management, and server administration---skills that many researchers lack.
+
+\textbf{B-IRES} (Bar-Ilan Research Evaluation System) addresses this gap by providing a unified platform that empowers researchers to:
+
+\begin{itemize}[leftmargin=*]
+    \item Design human-centric evaluations through simple, human-readable configuration files
+    \item Deploy complete experimental environments with minimal technical knowledge
+    \item Collect granular participant data in real-time with millisecond precision
+    \item Manage concurrent participants reliably with atomic quota management
+    \item Collaborate with team members through role-based access control (Admin, Researcher, Viewer)
+    \item Ensure data integrity through backend-authoritative state management
+    \item Support offline participant sessions with automatic synchronization upon reconnection
+\end{itemize}
+
+The platform philosophy centers on the principle that researchers should focus on \textit{what} they want to study, not \textit{how} to implement the technical infrastructure.
+
+\subsection{Platform Roadmap}
+
+B-IRES is under active development with an ambitious feature roadmap:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Visual Experiment Builder} (Planned): A drag-and-drop interface for constructing studies without writing YAML. Features will include visual flow editors showing conditional branching, component palettes with pre-built blocks, property panels for configuration, and live preview. The builder will generate YAML automatically, with an ``eject to code'' option for advanced customization.
+    
+    \item \textbf{Advanced Live Monitoring} (Planned): Real-time dashboards showing active sessions, quota status across conditions, error logs, and participant progress. Analytics will include completion rate tracking, response time distributions, drop-off analysis by stage, and anomaly detection.
+    
+    \item \textbf{Experiment Version Control} (Implemented): Every configuration save creates a new version, enabling rollback, comparison, and audit trails. Published experiments are immutable snapshots ensuring reproducibility.
+    
+    \item \textbf{Semantic Theme System} (Implemented): Pre-built visual themes (clinical, academic, high-contrast, dark mode) that researchers select by name, ensuring consistent branding without CSS knowledge.
+\end{itemize}
+
+%========================================
+\section{Vision and Philosophy}
+%========================================
+
+B-IRES is built on four foundational principles:
+
+\subsection{Accessibility First}
+The platform eliminates technical barriers. A researcher with no programming experience should be able to configure and deploy a sophisticated human-centric evaluation by editing straightforward text files and running a single command. The system handles all underlying complexity---from database setup to user session management.
+
+\subsection{Configuration Over Code}
+Every aspect of a study---stages, questions, branching logic, timing constraints, and visual elements---is defined in declarative YAML files. This \textit{Infrastructure-as-Configuration} approach means research trials are:
+\begin{itemize}[leftmargin=*]
+    \item Reproducible and version-controllable
+    \item Easy to modify without touching source code
+    \item Shareable between researchers and institutions
+    \item Immutable once published (templates are flattened into snapshots)
+\end{itemize}
+
+\subsection{Research-Grade Reliability}
+Human-centric evaluations require precise timing, consistent presentation, and comprehensive logging. B-IRES ensures that every participant interaction is captured, every response is timestamped with millisecond precision, and data integrity is maintained through redundant storage mechanisms and backend-authoritative state management.
+
+\subsection{Backend Authority}
+The server is the single source of truth for session state. Participants cannot manipulate their progress or skip stages via browser developer tools. Every state transition is validated server-side, and the client maintains only a read-only mirror of the authoritative state.
+
+%========================================
+\section{Core Features}
+%========================================
+
+\subsection{Flexible Study Design}
+
+B-IRES supports a hierarchical experiment structure organized as:
+
+\begin{center}
+\textbf{Experiment} $\rightarrow$ \textbf{Stages} $\rightarrow$ \textbf{Sub-Stages (Blocks)}
+\end{center}
+
+Each stage can contain multiple sub-stages, and each sub-stage can be one of several types:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{User Information}: Standardized demographic collection with validation rules
+    \item \textbf{Questionnaires}: Single or multiple-choice questions, text inputs, and scaled responses
+    \item \textbf{Rich Content}: HTML-formatted text, images, and styled presentations (inline or from files)
+    \item \textbf{Multimedia}: Video and audio stimuli with full playback control and event logging
+    \item \textbf{Interactive Tasks}: Embedded applications via sandboxed iframes with bidirectional communication
+    \item \textbf{Consent Forms}: Legal consent with checkbox confirmation and forced reading time
+    \item \textbf{Attention Checks}: Hidden validation questions to ensure data quality
+\end{itemize}
+
+\subsection{Conditional Branching and Dynamic Flow}
+
+Real-world research often requires adaptive pathways based on participant responses. B-IRES's logic engine (powered by JsonLogic predicates) supports:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Response-Based Routing}: Show or hide stages based on previous answers
+    \item \textbf{Parameter-Driven Assignment}: Assign participants to conditions based on URL parameters (e.g., recruitment source, experimental group)
+    \item \textbf{Demographic Filters}: Present different content based on participant characteristics
+    \item \textbf{Quota Management}: Automatically close conditions when target sample sizes are reached
+\end{itemize}
+
+\subsubsection{Example 1: Age-Based Routing}
+
+If a participant indicates they are under 18 years old, the system can automatically skip consent procedures requiring parental approval and redirect to an age-appropriate path:
+
+\begin{lstlisting}
+stages:
+  - id: "demographics"
+    type: "user_info"
+    fields:
+      - field: "age"
+        type: "number"
+        required: true
+
+  - id: "adult_consent"
+    type: "consent_form"
+    visibility_rule: "demographics.age >= 18"
+    
+  - id: "minor_notice"
+    type: "content_display"
+    visibility_rule: "demographics.age < 18"
+    content: "This study requires participants aged 18+."
+\end{lstlisting}
+
+\subsubsection{Example 2: Experience-Based Additional Questions}
+
+For studies involving gaming or technical tasks, you can present additional questions to experienced participants while skipping them for novices:
+
+\begin{lstlisting}
+stages:
+  - id: "gaming_background"
+    type: "questionnaire"
+    questions:
+      - id: "gaming_frequency"
+        text: "How often do you play video games?"
+        type: "select"
+        options:
+          - value: "never"
+            label: "Never"
+          - value: "rarely"
+            label: "Rarely (few times a year)"
+          - value: "monthly"
+            label: "Monthly"
+          - value: "weekly"
+            label: "Weekly"
+          - value: "daily"
+            label: "Daily"
+
+  # Only shown to frequent gamers (weekly or daily)
+  - id: "gamer_details"
+    type: "questionnaire"
+    visibility_rule: >
+      gaming_background.gaming_frequency == 'weekly' || 
+      gaming_background.gaming_frequency == 'daily'
+    questions:
+      - id: "preferred_genre"
+        text: "What is your preferred game genre?"
+        type: "select"
+        options:
+          - value: "fps"
+            label: "First-Person Shooter"
+          - value: "rpg"
+            label: "Role-Playing Games"
+          - value: "strategy"
+            label: "Strategy"
+          - value: "puzzle"
+            label: "Puzzle"
+          - value: "sports"
+            label: "Sports/Racing"
+            
+      - id: "hours_per_week"
+        text: "How many hours per week do you typically play?"
+        type: "number"
+        min: 1
+        max: 100
+        
+      - id: "competitive_gaming"
+        text: "Do you participate in competitive/ranked gaming?"
+        type: "radio"
+        options:
+          - value: "yes"
+            label: "Yes, regularly"
+          - value: "sometimes"
+            label: "Occasionally"
+          - value: "no"
+            label: "No"
+
+  # Advanced gaming task only for competitive players
+  - id: "advanced_gaming_task"
+    type: "iframe_sandbox"
+    visibility_rule: "gamer_details.competitive_gaming == 'yes'"
+    source: "/tasks/advanced_reaction_test.html"
+    
+  # Standard task for all others
+  - id: "standard_task"
+    type: "iframe_sandbox"
+    visibility_rule: "gamer_details.competitive_gaming != 'yes'"
+    source: "/tasks/basic_reaction_test.html"
+\end{lstlisting}
+
+\subsection{Timing and Pacing Controls}
+
+Precise temporal control is essential for many experimental paradigms. B-IRES provides:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Minimum Display Time}: Ensure participants cannot skip content too quickly (e.g., consent forms must be displayed for at least 30 seconds before the ``Next'' button enables)
+    \item \textbf{Maximum Response Time}: Set deadlines with configurable automatic actions (auto-submit, skip stage, or lock interface)
+    \item \textbf{Visual Countdowns}: Optional timers displayed to participants
+    \item \textbf{Media Synchronization}: Advance only when videos complete, pause, or reach specific timestamps
+\end{itemize}
+
+\subsection{Specialized Question Types}
+
+Beyond standard form inputs, B-IRES includes research-specific question formats:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Likert Scales}: Visual representations (faces, emoticons) for 5-point or 7-point scales with configurable visual themes
+    \item \textbf{Semantic Differentials}: Bipolar scales with labeled endpoints
+    \item \textbf{Matrix Questions}: Multiple items rated on the same scale in a grid format
+    \item \textbf{Ranking Tasks}: Drag-and-drop ordering of items
+    \item \textbf{Hidden Fields}: Automatic capture of metadata (timestamp, browser info, referral source, URL parameters)
+\end{itemize}
+
+\subsection{Progress Visualization}
+
+Participant engagement improves with clear progress indication. B-IRES automatically displays:
+
+\begin{itemize}[leftmargin=*]
+    \item Current stage and total stages (``Stage 2 of 5'')
+    \item Question progress within stages (``Question 3 of 10'')
+    \item Overall completion percentage with progress bar
+    \item Time remaining (when applicable)
+    \item Optional sidebar navigation showing completed, current, and upcoming stages
+\end{itemize}
+
+Progress calculations dynamically adjust based on conditional branching---if certain stages are skipped due to visibility rules, they don't appear in the count.
+
+\subsection{Offline Support and Resilience}
+
+B-IRES includes built-in resilience for unreliable network conditions:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{State Hydration}: Session state is persisted to browser storage; if the browser crashes or refreshes, the participant resumes exactly where they left off
+    \item \textbf{Offline Event Queue}: Interactions are queued locally (IndexedDB) when offline and synchronized automatically upon reconnection
+    \item \textbf{Idempotent Synchronization}: Each event carries a unique idempotency key; duplicate submissions (from retries) are detected and deduplicated server-side
+    \item \textbf{Visual Offline Indicator}: Participants see clear feedback when operating offline (``Will sync when connected'')
+\end{itemize}
+
+%========================================
+\section{Data Collection and Logging}
+%========================================
+
+\subsection{Comprehensive Event Tracking}
+
+B-IRES captures every meaningful participant interaction:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Navigation Events}: Stage entries, exits, and transitions
+    \item \textbf{Response Events}: Answer selections, modifications, and submissions
+    \item \textbf{Interaction Events}: Button clicks, video plays/pauses/seeks, scroll actions, fullscreen toggles
+    \item \textbf{Timing Data}: Duration on each stage, response latencies, total session time
+    \item \textbf{System Events}: Page visibility changes, window focus/blur, connection status, offline queue sync
+\end{itemize}
+
+Each event is timestamped with millisecond precision and tagged with unique identifiers for the participant, session, stage, and element. Events include an idempotency key for deduplication during offline sync.
+
+\subsection{Single-Write Architecture with Async Backup}
+
+B-IRES employs a robust storage strategy that avoids the dual-write anti-pattern:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Primary Database (MongoDB)}: Synchronous write for every event---fast, reliable, and immediately queryable
+    \item \textbf{Object Storage Backup (S3/MinIO)}: Asynchronous background worker monitors database changes and exports to object storage as JSON Lines files
+    \item \textbf{On-Demand CSV Export}: Researchers request CSV exports through the dashboard; data is transformed from MongoDB into analysis-ready formats
+\end{itemize}
+
+This architecture ensures:
+\begin{itemize}[leftmargin=*]
+    \item No blocking I/O on the API path
+    \item No partial-write consistency issues
+    \item Scalable deployment (no local filesystem dependencies)
+    \item Data survival even in cases of primary database issues
+\end{itemize}
+
+\subsection{Participant Identity Management}
+
+The platform distinguishes between:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{User ID}: A persistent UUIDv4 stored in an HTTP-only cookie (1-year duration) that tracks the same individual across multiple sessions---useful for longitudinal studies and preventing duplicate participation
+    \item \textbf{Session ID}: A unique UUIDv4 generated for each experimental run
+    \item \textbf{External IDs}: URL parameters (e.g., \texttt{?worker\_id=123}) are automatically captured and linked to internal identifiers
+\end{itemize}
+
+%========================================
+\section{Use Cases and Applications}
+%========================================
+
+B-IRES's flexibility makes it suitable for diverse multi-modal research scenarios:
+
+\subsection{Psychological Research}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Cognitive Tasks}: Reaction time studies, memory tests, attention tasks via embedded applications
+    \item \textbf{Survey Research}: Multi-scale personality assessments, attitude measurements with Likert scales
+    \item \textbf{Emotional Response Studies}: Stimulus presentation (video/images) with immediate affect ratings
+    \item \textbf{Decision-Making Studies}: Economic games, risk preference tasks, gambling paradigms
+\end{itemize}
+
+\subsection{Human-Computer Interaction}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Product Evaluation}: A/B testing with embedded prototypes
+    \item \textbf{Usability Studies}: Task completion with think-aloud protocols
+    \item \textbf{Feature Preference}: Conjoint analysis and feature ranking
+    \item \textbf{Interface Comparison}: Side-by-side evaluation with randomized presentation order
+\end{itemize}
+
+\subsection{Educational Assessment}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Learning Studies}: Pre-test, intervention, post-test designs with conditional content
+    \item \textbf{Instructional Design Research}: Comparing teaching method effectiveness
+    \item \textbf{Adaptive Testing}: Dynamic difficulty adjustment based on performance
+    \item \textbf{Knowledge Assessment}: Multi-stage examinations with attention checks
+\end{itemize}
+
+\subsection{Market Research}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Concept Testing}: Evaluating product ideas with target demographics
+    \item \textbf{Brand Perception}: Semantic differential scales across brand attributes
+    \item \textbf{Advertisement Effectiveness}: Exposure and recall studies with video stimuli
+    \item \textbf{Consumer Behavior}: Choice tasks and willingness-to-pay studies
+\end{itemize}
+
+\subsection{Healthcare and Clinical Research}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Patient Surveys}: Symptom tracking, quality of life assessments with validated instruments
+    \item \textbf{Treatment Studies}: Comparing intervention groups with proper randomization via URL parameters
+    \item \textbf{Digital Therapeutics}: Delivering and measuring therapeutic content with compliance tracking
+    \item \textbf{Screening Instruments}: Multi-stage diagnostic assessments with conditional follow-ups
+\end{itemize}
+
+%========================================
+\section{Concurrency and Scale}
+%========================================
+
+Modern research often requires large sample sizes collected rapidly. B-IRES is designed to handle:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Concurrent Participants}: 100+ simultaneous users without performance degradation, thanks to asynchronous I/O and optimized database operations
+    \item \textbf{Atomic Quota Management}: Condition closure when target N is reached using atomic database operations (Redis-backed reservations) preventing over-enrollment
+    \item \textbf{Race Condition Prevention}: Reservation systems with Time-To-Live (TTL) ensure that if only one slot remains, exactly one participant receives it
+    \item \textbf{Graceful Overflow}: Participants who cannot be assigned are automatically redirected to alternative paths, fallback stages, or completion screens
+    \item \textbf{Horizontal Scaling}: Stateless backend design supports Kubernetes deployment with multiple replicas
+\end{itemize}
+
+%========================================
+\section{Deployment Simplicity}
+%========================================
+
+A core B-IRES principle is that deployment should require no technical expertise beyond basic file management. The platform uses containerization technology (Docker) to package all components---web server, database, cache, and application---into a self-contained unit.
+
+\subsection{Researcher Workflow}
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Configure}: Edit YAML files to define experiment structure, questions, and logic (or use the visual builder when available)
+    \item \textbf{Upload Assets}: Use the Media Library to upload images, videos, and HTML files to object storage
+    \item \textbf{Validate}: Run the built-in validator to check configuration syntax, asset references, and logical consistency
+    \item \textbf{Launch}: Run a single command (\texttt{docker-compose up}) to start the entire platform
+    \item \textbf{Distribute}: Share the experiment URL with participants
+    \item \textbf{Monitor}: View real-time data through the admin dashboard
+    \item \textbf{Export}: Download results in analysis-ready formats (CSV, JSON, SPSS-compatible)
+\end{enumerate}
+
+\subsection{Self-Contained Environment}
+
+The platform runs entirely within isolated containers, meaning:
+
+\begin{itemize}[leftmargin=*]
+    \item No conflicts with existing software on the server
+    \item Identical behavior across different operating systems (Linux, macOS, Windows)
+    \item Easy backup and migration (export data, copy configuration, run elsewhere)
+    \item Simple updates (pull new container versions)
+    \item Multiple deployment options: local Docker Compose, single cloud server with Nginx/SSL, or Kubernetes for high-scale production
+\end{itemize}
+
+%========================================
+\section{Integration Capabilities}
+%========================================
+
+\subsection{External Task Integration}
+
+B-IRES can embed external applications (games, simulations, custom tasks) while maintaining centralized data collection. The embedded content communicates with the platform through a standardized messaging protocol (\texttt{window.postMessage}), allowing:
+
+\begin{itemize}[leftmargin=*]
+    \item External tasks to report events, scores, and completion status to the central log
+    \item The platform to control task state (start, pause, reset) via commands
+    \item Synchronized progression (advance only when the task signals completion)
+    \item Context injection: the shell automatically adds user ID, session ID, stage ID, and timestamp to all logged events
+\end{itemize}
+
+This enables researchers to use existing validated tasks or develop custom stimuli while benefiting from B-IRES's infrastructure, logging, and participant management.
+
+\subsection{Asset Management}
+
+All user-uploaded assets (images, videos, HTML files) are stored in object storage (S3/MinIO), not on the local filesystem. This enables:
+
+\begin{itemize}[leftmargin=*]
+    \item Horizontal scaling without filesystem synchronization issues
+    \item Media Library interface for drag-and-drop uploads
+    \item Asset previews and organization by experiment
+    \item One-click copy of asset references for YAML configuration
+\end{itemize}
+
+%========================================
+\section{Data Export and Analysis}
+%========================================
+
+Research value lies in analysis, not data collection. B-IRES facilitates the transition from raw data to insights with comprehensive export capabilities.
+
+\subsection{Export Formats}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Wide Format (CSV)}: One row per participant, one column per variable---ideal for SPSS, R, Stata, and Python pandas. Column names follow a hierarchical pattern (\texttt{stage\_question}) for easy identification.
+    
+    \item \textbf{Long Format (CSV/JSON)}: One row per event---for detailed timeline analysis, event sequence mining, and response latency studies.
+    
+    \item \textbf{JSON Lines}: Full hierarchical data with all metadata, suitable for programmatic processing and data pipelines.
+    
+    \item \textbf{SPSS-Compatible}: Wide format with variable labels and value labels embedded for direct import into SPSS.
+\end{itemize}
+
+\subsection{Wide Format Export Example}
+
+A typical wide-format export might look like:
+
+\begin{lstlisting}
+participant_id,session_id,start_time,end_time,duration_sec,
+  demographics_age,demographics_gender,demographics_education,
+  task1_score,task1_duration_ms,task1_errors,
+  likert_q1,likert_q2,likert_q3,
+  feedback_comment,completed
+  
+p_abc123,s_xyz789,2026-01-04T10:00:00Z,2026-01-04T10:15:32Z,932,
+  28,female,masters,
+  85,45230,2,
+  5,4,6,
+  "Very engaging study",true
+  
+p_def456,s_uvw012,2026-01-04T10:02:15Z,2026-01-04T10:18:45Z,990,
+  35,male,bachelors,
+  72,52100,4,
+  4,3,5,
+  "Instructions were clear",true
+\end{lstlisting}
+
+\subsection{Long Format Export Example}
+
+For event-level analysis:
+
+\begin{lstlisting}
+event_id,participant_id,session_id,timestamp,stage_id,
+  event_type,element_id,value,duration_ms
+
+evt_001,p_abc123,s_xyz789,2026-01-04T10:00:05Z,consent,
+  view,consent_text,,
+evt_002,p_abc123,s_xyz789,2026-01-04T10:00:35Z,consent,
+  click,agree_checkbox,true,
+evt_003,p_abc123,s_xyz789,2026-01-04T10:00:37Z,consent,
+  submit,next_button,,30200
+evt_004,p_abc123,s_xyz789,2026-01-04T10:00:38Z,demographics,
+  view,demographics_form,,
+evt_005,p_abc123,s_xyz789,2026-01-04T10:00:45Z,demographics,
+  input,age_field,28,
+evt_006,p_abc123,s_xyz789,2026-01-04T10:00:48Z,demographics,
+  select,gender_field,female,
+\end{lstlisting}
+
+\subsection{Export API Examples}
+
+Researchers can request exports programmatically or via the dashboard:
+
+\begin{lstlisting}
+# Wide format with all stages
+GET /api/export/exp_abc123?format=wide
+
+# Wide format with specific stages only
+GET /api/export/exp_abc123?format=wide&stages=demographics,task1,feedback
+
+# Long format for timeline analysis
+GET /api/export/exp_abc123?format=long&event_types=click,submit
+
+# JSON with full metadata
+GET /api/export/exp_abc123?format=json&include_metadata=true
+
+# Filter by date range
+GET /api/export/exp_abc123?format=wide&from=2026-01-01&to=2026-01-31
+
+# Filter by completion status
+GET /api/export/exp_abc123?format=wide&completed=true
+\end{lstlisting}
+
+\subsection{Real-Time Monitoring Dashboard}
+
+Researchers don't need to wait until data collection ends to assess progress:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Live Participant Counts}: Total started, in-progress, and completed by condition
+    \item \textbf{Quota Status}: Visual indicators showing slots remaining for quota-limited conditions
+    \item \textbf{Completion Funnel}: Drop-off rates at each stage with visual funnel chart
+    \item \textbf{Response Time Distribution}: Histograms and percentiles for each stage
+    \item \textbf{Active Sessions}: Currently active participants with stage and duration
+    \item \textbf{Error Log}: Failed submissions, validation errors, and system issues
+    \item \textbf{Anomaly Alerts}: Unusually fast completions, repeated IP addresses, failed attention checks
+\end{itemize}
+
+\subsection{Analytics Summary Example}
+
+The dashboard provides at-a-glance metrics:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Metric} & \textbf{Condition A} & \textbf{Condition B} & \textbf{Total} \\
+\midrule
+Started & 156 & 148 & 304 \\
+Completed & 142 & 135 & 277 \\
+Completion Rate & 91.0\% & 91.2\% & 91.1\% \\
+Median Duration & 12m 34s & 13m 02s & 12m 48s \\
+Attention Check Pass & 138 & 131 & 269 \\
+Data Quality Rate & 97.2\% & 97.0\% & 97.1\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%========================================
+\section{Security and Ethics Considerations}
+%========================================
+
+Research involving human participants requires careful attention to data protection. B-IRES incorporates:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Local Data Storage}: All data remains on the researcher's infrastructure (no cloud dependencies unless explicitly chosen)
+    \item \textbf{Pseudonymization}: Participant identifiers are randomly generated UUIDs with no personally identifiable information
+    \item \textbf{Consent Documentation}: Built-in support for informed consent flows with configurable forced reading times
+    \item \textbf{Data Minimization}: Researchers configure exactly what is collected; no unnecessary tracking
+    \item \textbf{Role-Based Access Control}: Three roles (Admin, Researcher, Viewer) with appropriate permissions for multi-investigator projects
+    \item \textbf{Variable Namespacing}: Server-side secrets (API keys, webhook URLs) are never exposed to the browser; only explicitly public variables are sent to clients
+    \item \textbf{JWT Authentication}: Secure, stateless authentication with refresh tokens for admin access
+\end{itemize}
+
+%========================================
+\section{User Management and Collaboration}
+%========================================
+
+B-IRES supports collaborative research teams with role-based access:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Admin}: Full platform access---manage users, all experiments, system configuration, and view all logs
+    \item \textbf{Researcher}: Create and edit own experiments, view own experiment data, export own results
+    \item \textbf{Viewer}: Read-only access to assigned experiments and their data (useful for research assistants or external collaborators)
+\end{itemize}
+
+Experiment ownership and permissions ensure that researchers can work independently while admins maintain oversight.
+
+%========================================
+\section{Extensibility}
+%========================================
+
+While B-IRES is designed to work out-of-the-box for common scenarios, the architecture supports extension:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Custom Block Types}: Developers can create new sub-stage types for specialized needs following the standard communication interface
+    \item \textbf{Additional Storage Backends}: The pluggable adapter architecture supports adding PostgreSQL, MySQL, or other databases alongside MongoDB
+    \item \textbf{Semantic Themes}: Institution-specific visual themes can be added to the theme library
+    \item \textbf{Analysis Pipelines}: Webhook notifications and API access enable integration with automated analysis workflows
+    \item \textbf{Internationalization}: Multi-language support for experiment content and UI labels
+\end{itemize}
+
+%========================================
+\section{Conclusion}
+%========================================
+
+The \textbf{Bar-Ilan Research Evaluation System (B-IRES)} represents a significant step toward democratizing research technology for human-centric evaluations. By abstracting away technical complexity while maintaining research-grade rigor, B-IRES enables researchers across disciplines to design, deploy, and manage sophisticated multi-modal research trials.
+
+Key advantages include:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Reduced Time-to-Launch}: From concept to live study in hours, not weeks
+    \item \textbf{Lower Technical Barriers}: No programming required for standard use cases
+    \item \textbf{Improved Data Quality}: Comprehensive logging captures what traditional surveys miss; attention checks ensure participant engagement
+    \item \textbf{Scalable Collection}: Handle large samples with concurrent participant support and atomic quota management
+    \item \textbf{Reproducible Research}: Configuration files serve as executable documentation; published experiments are immutable snapshots
+    \item \textbf{Offline Resilience}: Participants can continue during network interruptions with automatic synchronization
+    \item \textbf{Collaborative Teams}: Role-based access enables secure multi-investigator projects
+\end{itemize}
+
+As research involving human participants continues to evolve toward larger samples, more complex designs, and richer data types, platforms like B-IRES will become essential infrastructure for the academic and industry research community.
+
+\vspace{2em}
+\hrule
+\vspace{1em}
+
+\begin{center}
+\textit{For technical specifications, deployment instructions, and configuration references, please consult the accompanying technical documentation.}
+\end{center}
+
+\end{document}

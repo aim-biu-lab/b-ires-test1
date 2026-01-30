@@ -1,0 +1,62 @@
+# Multiple Choice Images Template
+# Image-based answers with captions
+
+meta:
+  id: "multiple_choice_images_template"
+  version: "1.0.0"
+  name: "Multiple Choice (With Images)"
+  description: "Image-based answers with captions"
+  category: "surveys"
+
+stages:
+  - id: "mc_image_question"
+    type: "multiple_choice"
+    label: "Image Question"
+    title: "Visual Recognition"
+    description: "Select the correct image"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    question:
+      type: "text"
+      content: "Which image shows a cat?"
+
+    answers:
+      - id: "a"
+        type: "image"
+        image_url: ""
+        content: "Image A"
+        subtext: "Option A"
+      - id: "b"
+        type: "image"
+        image_url: ""
+        content: "Image B"
+        subtext: "Option B"
+      - id: "c"
+        type: "image"
+        image_url: ""
+        content: "Image C"
+        subtext: "Option C"
+      - id: "d"
+        type: "image"
+        image_url: ""
+        content: "Image D"
+        subtext: "Option D"
+
+    config:
+      layout: "2x2"
+      correct_answer: "a"
+      allow_multiple_selection: false
+      lock_after_submit: true
+      randomize_order: false
+      show_answer_labels: true
+      label_style: "letter"
+      show_correct_after_submit: true
+      show_explanation_after_submit: false
+      show_answer_explanations: false
+      track_score: false
+      show_score_to_participant: false
+      score_format: "Correct: {{correct}} of {{total}}"

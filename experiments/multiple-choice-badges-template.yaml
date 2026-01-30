@@ -1,0 +1,73 @@
+# Multiple Choice Badges Template
+# Answers with AI/Popular badges and explanations
+
+meta:
+  id: "multiple_choice_badges_template"
+  version: "1.0.0"
+  name: "Multiple Choice (With Badges)"
+  description: "Answers with AI/Popular badges and explanations"
+  category: "surveys"
+
+stages:
+  - id: "mc_badges_question"
+    type: "multiple_choice"
+    label: "Question with Badges"
+    title: "Question"
+    description: "Select the best answer"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    question:
+      type: "text"
+      content: "Which approach would you recommend?"
+      subtext: "Consider all factors"
+
+    explanation_after_submit: |
+      <p>The correct approach depends on your specific context and requirements.</p>
+
+    answers:
+      - id: "a"
+        type: "text"
+        content: "Option A - Traditional approach"
+        explanation: "A proven method with established best practices."
+        badges:
+          - type: "popular"
+            label: "Most Popular"
+      - id: "b"
+        type: "text"
+        content: "Option B - AI-recommended approach"
+        explanation: "Based on recent advances in the field."
+        badges:
+          - type: "ai"
+            label: "AI Suggested"
+      - id: "c"
+        type: "text"
+        content: "Option C - Hybrid approach"
+        explanation: "Combines traditional and modern methods."
+        badges:
+          - type: "ai"
+            label: "AI Suggested"
+          - type: "popular"
+            label: "Trending"
+      - id: "d"
+        type: "text"
+        content: "Option D - Experimental approach"
+        explanation: "A newer method still being evaluated."
+
+    config:
+      layout: "single_column"
+      correct_answer: "c"
+      allow_multiple_selection: false
+      lock_after_submit: true
+      randomize_order: false
+      show_answer_labels: true
+      label_style: "letter"
+      show_correct_after_submit: true
+      show_explanation_after_submit: true
+      show_answer_explanations: true
+      track_score: false
+      show_score_to_participant: false
+      score_format: "Correct: {{correct}} of {{total}}"

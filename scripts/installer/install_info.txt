@@ -1,0 +1,183 @@
+# =============================================================================
+# B-IRES Platform - VPS Installation Script
+# =============================================================================
+# A netdata-style one-liner installation system for deploying B-IRES
+# on Ubuntu VPS (Linode, DigitalOcean, AWS, etc.)
+# =============================================================================
+
+## Quick Start
+
+### Interactive Installation (Recommended for first-time users)
+
+    curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/bires/main/scripts/install.sh | bash
+
+### With Configuration File (Unattended Installation)
+
+    curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/bires/main/scripts/install.sh | bash -s -- --config /path/to/config.txt --non-interactive
+
+### Low-Profile Mode (For 2GB RAM instances)
+
+    curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/bires/main/scripts/install.sh | bash -s -- --low-profile
+
+### Local Installation (For development/testing)
+
+    cd /path/to/bires
+    bash scripts/install.sh --local
+
+
+## Command-Line Options
+
+    --config FILE       Use configuration file for unattended installation
+    --low-profile       Enable low-memory mode (for 2GB RAM instances)
+    --non-interactive   Run without prompts (requires --config)
+    --local             Use local installer files (for development)
+    --help              Show help message
+
+
+## Installation Steps
+
+The installer performs 10 steps in order:
+
+1. Security Setup      - System updates, create user, SSH hardening, fail2ban
+2. Docker Setup        - Install Docker CE and Docker Compose
+3. Clone Project       - Clone B-IRES from GitHub
+4. Configure Env       - Generate .env file with secure passwords
+5. SSL Setup           - Install Certbot, obtain SSL certificates
+6. Nginx Config        - Configure nginx with your domain
+7. Deploy App          - Build and start all Docker containers
+8. Admin User          - Create B-IRES admin account
+9. Firewall Setup      - Configure UFW with required ports
+10. Netdata Setup      - Install server monitoring
+
+
+## Progress Persistence
+
+- Installation progress is saved to /var/lib/bires/.install-state
+- If interrupted, simply run the installer again to resume
+- State includes: completed steps, configuration values, generated passwords
+
+
+## Configuration File Format
+
+Copy scripts/installer/config.example.txt and customize:
+
+    # Required settings
+    DOMAIN=bires-study.com
+    ADMIN_EMAIL=admin@example.com
+    
+    # Optional settings (defaults shown)
+    CREATE_USER=bires
+    SETUP_SSL=yes
+    SETUP_SECURITY=yes
+    SETUP_FIREWALL=yes
+    INSTALL_NETDATA=yes
+    AUTO_GENERATE_PASSWORDS=yes
+    LOW_PROFILE_MODE=no
+
+See config.example.txt for all available options.
+
+
+## Post-Installation Management
+
+Start services:
+    bash ~/bires/scripts/start-prod.sh
+
+Stop services:
+    bash ~/bires/scripts/stop-prod.sh
+
+Restart services:
+    bash ~/bires/scripts/restart-prod.sh
+
+View logs:
+    cd ~/bires && docker compose logs -f
+
+View specific service logs:
+    cd ~/bires && docker compose logs -f backend
+
+
+## Generated Credentials
+
+After installation, credentials are saved to:
+    ~/bires-credentials.txt
+
+This includes:
+- Admin panel login (email/password)
+- Database passwords (MongoDB, Redis)
+- MinIO credentials
+- JWT secret
+
+
+## Firewall Ports
+
+The installer configures UFW to allow:
+- 22/tcp   (SSH)
+- 80/tcp   (HTTP - redirects to HTTPS)
+- 443/tcp  (HTTPS)
+- 19999/tcp (Netdata - optional)
+
+
+## System Requirements
+
+Minimum:
+- Ubuntu 20.04, 22.04, or 24.04 LTS
+- 2GB RAM (use --low-profile)
+- 20GB disk space
+- Root or sudo access
+
+Recommended:
+- 4GB+ RAM
+- 40GB+ disk space
+- Domain name with DNS configured
+
+
+## Troubleshooting
+
+Reset installation and start fresh:
+    sudo rm -rf /var/lib/bires/.install-state
+    bash scripts/install.sh
+
+View installation logs:
+    cat /var/lib/bires/install.log
+
+Check service status:
+    cd ~/bires && docker compose ps
+
+Check Docker logs:
+    cd ~/bires && docker compose logs --tail=50 [service_name]
+
+
+## File Structure
+
+scripts/
+├── install.sh                    # Bootstrap one-liner script
+├── start-prod.sh                 # Start production services
+├── stop-prod.sh                  # Stop production services
+├── restart-prod.sh               # Restart production services
+└── installer/
+    ├── bires-setup.sh            # Main installer orchestrator
+    ├── config.example.txt        # Configuration template
+    ├── install_info.txt          # This file
+    ├── lib/
+    │   ├── common.sh             # Shared functions
+    │   ├── state-manager.sh      # Progress persistence
+    │   ├── config-parser.sh      # Config file parsing
+    │   └── password-generator.sh # Secure password generation
+    └── modules/
+        ├── 01-security-setup.sh  # Server hardening
+        ├── 02-docker-setup.sh    # Docker installation
+        ├── 03-clone-project.sh   # Git clone
+        ├── 04-configure-env.sh   # Environment setup
+        ├── 05-ssl-setup.sh       # SSL certificates
+        ├── 06-nginx-config.sh    # Nginx configuration
+        ├── 07-deploy-app.sh      # Docker deployment
+        ├── 08-admin-user.sh      # Admin user creation
+        ├── 09-firewall-setup.sh  # UFW firewall
+        └── 10-netdata-setup.sh   # Netdata monitoring
+
+
+## Support
+
+For issues:
+1. Check the installation log: /var/lib/bires/install.log
+2. Check Docker logs: docker compose logs
+3. Review the Linode deployment guide: docs/linode-deployment-guide.md

@@ -1,0 +1,32 @@
+# Video Task Template
+# Video player with completion tracking
+
+meta:
+  id: "video_task_template"
+  version: "1.0.0"
+  name: "Video Task"
+  description: "Video player with completion tracking"
+  category: "tasks"
+
+stages:
+  - id: "video_task"
+    type: "video_player"
+    label: "Watch Video"
+    title: "Video"
+    description: "Please watch the following video carefully"
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    source: ""
+    
+    config:
+      autoplay: false
+      controls: true
+      allow_seek: false
+      allow_pause: true
+      width: "100%"
+      height: "100%"
+      require_complete: true

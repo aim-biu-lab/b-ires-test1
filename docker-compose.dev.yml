@@ -1,0 +1,85 @@
+version: "3.9"
+
+# ============================================================================
+# IMPORTANT: PORT 80 CONFLICT FIX
+# ============================================================================
+# To avoid "port 80 already in use" errors, you MUST use one of these:
+#
+#   Option 1 (RECOMMENDED): Use the helper script
+#     ./docker-compose-dev.sh up -d
+#
+#   Option 2: Manually exclude nginx
+#     docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d --scale nginx=0
+#
+#   DO NOT USE: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#   (This will try to start nginx on port 80 and fail)
+# ============================================================================
+#
+# Development overrides - use with: ./docker-compose-dev.sh up -d
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+      - ./themes:/app/themes
+      - ./experiments:/app/experiments
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+
+  experiment-shell:
+    build:
+      context: ./frontend/experiment-shell
+      dockerfile: Dockerfile.dev
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/experiment-shell:/app
+      - /app/node_modules
+
+  admin-dashboard:
+    build:
+      context: ./frontend/admin-dashboard
+      dockerfile: Dockerfile.dev
+    command: npm run dev -- --host 0.0.0.0 --port 3001
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend/admin-dashboard:/app
+      - /app/node_modules
+
+  # Mongo Express for debugging
+  mongo-express:
+    image: mongo-express:latest
+    container_name: bires-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://mongo:27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongo
+    networks:
+      - bires-network
+
+  # Nginx - Disabled in development (services accessible directly on their ports)
+  # Backend: http://localhost:8000
+  # Experiment Shell: http://localhost:3000
+  # Admin Dashboard: http://localhost:3001
+  # IMPORTANT: Nginx is disabled to avoid port 80 conflicts
+  # You MUST use one of these commands:
+  #   1. ./docker-compose-dev.sh up -d  (recommended)
+  #   2. docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d --scale nginx=0
+  nginx:
+    # Override ports to empty to prevent binding (but Docker Compose merges arrays, so this won't work)
+    # Instead, we use --scale nginx=0 in the helper script
+    entrypoint: ["/bin/sh", "-c", "echo 'Nginx disabled in dev mode' && exit 0"]
+

@@ -1,0 +1,52 @@
+# Text with Two Images Template
+# Text content with two images side by side below
+
+meta:
+  id: "text_with_two_images_template"
+  version: "1.0.0"
+  name: "Text with Two Images"
+  description: "Text content with two images side by side below"
+  category: "content"
+
+stages:
+  - id: "text_with_images"
+    type: "content_display"
+    label: "Content"
+    title: "Title"
+    description: ""
+    mandatory: true
+    
+    layout:
+      width: 70%
+      align_vertical: upper-third
+
+    content_type: "html"
+    content: |
+      <div style="max-width: 900px; margin: 0 auto;">
+        <h2>Your Heading</h2>
+        <p>Your text content goes here. You can add multiple paragraphs, 
+        lists, or any other HTML content above the images.</p>
+        
+        <div style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem;">
+          <div style="flex: 1; min-width: 280px; max-width: 400px; text-align: center;">
+            <img 
+              src="YOUR_FIRST_IMAGE_URL_HERE" 
+              alt="First image description" 
+              style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+            />
+            <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
+              <em>Caption for first image</em>
+            </p>
+          </div>
+          <div style="flex: 1; min-width: 280px; max-width: 400px; text-align: center;">
+            <img 
+              src="YOUR_SECOND_IMAGE_URL_HERE" 
+              alt="Second image description" 
+              style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
+            />
+            <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
+              <em>Caption for second image</em>
+            </p>
+          </div>
+        </div>
+      </div>
