@@ -5,7 +5,7 @@
  * Shows pick groups, ordering, visibility conditions, and more.
  */
 
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../../lib/api'
 import { PathNode } from './path-nodes'
 import {

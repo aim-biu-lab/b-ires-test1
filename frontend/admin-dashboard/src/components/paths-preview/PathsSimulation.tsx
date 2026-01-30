@@ -100,7 +100,6 @@ export function PathsSimulation({ experimentId, config }: PathsSimulationProps) 
             type: 'numeric',
             min: v.min ?? 0,
             max: v.max ?? 100,
-            distribution: 'uniform',
           }
         } else if (v.type === 'boolean') {
           defaults[v.path] = { type: 'boolean', truePercentage: 0.5 }

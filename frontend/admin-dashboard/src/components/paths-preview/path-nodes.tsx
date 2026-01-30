@@ -285,7 +285,7 @@ export function PathNode({ node, expandedNodes, onToggle, depth }: PathNodeProps
             style={{ marginLeft: depth * 24 + 12 }}
           />
           
-          {node.children?.map((child, index) => (
+          {node.children?.map((child) => (
             <PathNode
               key={child.id}
               node={child}

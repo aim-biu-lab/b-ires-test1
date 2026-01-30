@@ -20,7 +20,6 @@ import {
   ORDERING_MODES,
   BALANCE_ON_OPTIONS,
   PICK_STRATEGIES,
-  PICK_CONDITION_OPERATORS,
 } from './yaml-schema'
 
 // ============================================================================
@@ -41,6 +40,8 @@ export type GuiFieldType =
   | 'weights'           // Context-aware weight editor for weighted distribution
   | 'visibility_rule'   // Visibility rule builder with variable picker
   | 'latin_square'      // Latin Square sequence preview (read-only)
+  | 'pick_assigns'      // Key-value pairs for assigning variables when picked
+  | 'pick_conditions'   // Conditions for filtering candidates based on pick_assigns
 
 export interface SelectOption {
   value: string
