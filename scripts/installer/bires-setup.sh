@@ -216,7 +216,7 @@ show_main_menu() {
 # Module Execution
 # =============================================================================
 
-run_module() {
+execute_module() {
     local module_file="$1"
     local module_path="${SCRIPT_DIR}/modules/${module_file}"
     
@@ -244,7 +244,7 @@ run_all_modules() {
         
         log_info "Running module: ${module}"
         
-        if ! run_module "${module}"; then
+        if ! execute_module "${module}"; then
             local exit_code=$?
             
             if [[ ${exit_code} -eq 2 ]]; then
