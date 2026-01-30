@@ -38,7 +38,8 @@ export class HotEditReceiver {
   private callbacks: HotEditCallbacks | null = null
   private connected = false
   private messageHandler: ((event: MessageEvent) => void) | null = null
-  private editorOrigin: string | null = null
+  // Reserved for future security validation (origin checking)
+  private _editorOrigin: string | null = null
 
   constructor(experimentId: string) {
     this.experimentId = experimentId
@@ -61,8 +62,8 @@ export class HotEditReceiver {
       // Ignore messages for different experiments (shouldn't happen, but safety check)
       if (message.experimentId !== this.experimentId) return
 
-      // Store the editor's origin for responses
-      this.editorOrigin = event.origin
+      // Store the editor's origin for responses (reserved for future security validation)
+      this._editorOrigin = event.origin
 
       switch (message.type) {
         case 'ping':
@@ -125,7 +126,7 @@ export class HotEditReceiver {
     }
     this.connected = false
     this.callbacks = null
-    this.editorOrigin = null
+    this._editorOrigin = null
   }
 
   /**

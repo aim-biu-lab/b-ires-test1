@@ -123,7 +123,7 @@ function UserInfoField({ field, value, error, onChange, readOnly = false, requir
   const disabledClass = readOnly ? 'opacity-70 cursor-not-allowed' : ''
   
   // Get margin from field config (CSS value like "10px", "20px 0 10px 0")
-  const inputMargin = (field as Record<string, unknown>).margin as string | undefined
+  const inputMargin = (field as unknown as Record<string, unknown>).margin as string | undefined
   const inputStyle = inputMargin ? { margin: inputMargin } : undefined
   
   const renderInput = () => {

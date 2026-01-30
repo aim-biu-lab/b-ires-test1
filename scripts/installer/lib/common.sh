@@ -118,6 +118,22 @@ log_step() {
 # User Interaction Functions
 # =============================================================================
 
+# Helper function to check if we can read from terminal
+# Usage: ensure_tty
+# Returns 0 if terminal is available (stdin is tty or /dev/tty exists), 1 if not
+ensure_tty() {
+    if [[ -t 0 ]]; then
+        return 0  # stdin is already a terminal
+    fi
+    
+    # stdin is not a terminal, check if /dev/tty is available
+    if [[ -r /dev/tty ]]; then
+        return 0  # We can read from /dev/tty
+    fi
+    
+    return 1  # No terminal available
+}
+
 # Ask yes/no question
 # Returns 0 for yes, 1 for no
 ask_yes_no() {
@@ -129,6 +145,12 @@ ask_yes_no() {
         [[ "${default}" == "y" ]] && return 0 || return 1
     fi
     
+    # Ensure we have a terminal for input
+    if ! ensure_tty; then
+        log_warning "No terminal available for input, using default: ${default}"
+        [[ "${default}" == "y" ]] && return 0 || return 1
+    fi
+    
     if [[ "${default}" == "y" ]]; then
         prompt="${prompt} [Y/n]: "
     else
@@ -137,7 +159,7 @@ ask_yes_no() {
     
     while true; do
         echo -en "${COLOR_YELLOW}${prompt}${COLOR_NC}"
-        read -r response
+        read -r response </dev/tty
         response="${response:-$default}"
         response=$(echo "${response}" | tr '[:upper:]' '[:lower:]')
         
@@ -162,13 +184,20 @@ ask_input() {
         return 0
     fi
     
+    # Ensure we have a terminal for input
+    if ! ensure_tty; then
+        log_warning "No terminal available for input, using default: ${default}"
+        eval "${var_name}='${default}'"
+        return 0
+    fi
+    
     if [[ -n "${default}" ]]; then
         echo -en "${COLOR_YELLOW}${prompt} [${default}]: ${COLOR_NC}"
     else
         echo -en "${COLOR_YELLOW}${prompt}: ${COLOR_NC}"
     fi
     
-    read -r response
+    read -r response </dev/tty
     response="${response:-$default}"
     eval "${var_name}='${response}'"
 }
@@ -186,9 +215,16 @@ ask_password() {
         return 0
     fi
     
+    # Ensure we have a terminal for input
+    if ! ensure_tty; then
+        log_warning "No terminal available for password input"
+        eval "${var_name}=''"
+        return 0
+    fi
+    
     while true; do
         echo -en "${COLOR_YELLOW}${prompt}: ${COLOR_NC}"
-        read -rs password
+        read -rs password </dev/tty
         echo ""
         
         if [[ -z "${password}" ]]; then
@@ -198,7 +234,7 @@ ask_password() {
         
         if [[ "${confirm}" == "true" ]]; then
             echo -en "${COLOR_YELLOW}Confirm password: ${COLOR_NC}"
-            read -rs password_confirm
+            read -rs password_confirm </dev/tty
             echo ""
             
             if [[ "${password}" != "${password_confirm}" ]]; then
@@ -226,6 +262,13 @@ ask_choice() {
         return 0
     fi
     
+    # Ensure we have a terminal for input
+    if ! ensure_tty; then
+        log_warning "No terminal available for input, using default: ${default}"
+        eval "${var_name}='${default}'"
+        return 0
+    fi
+    
     IFS='|' read -ra opts <<< "${options}"
     
     echo -e "${COLOR_YELLOW}${prompt}${COLOR_NC}"
@@ -241,7 +284,7 @@ ask_choice() {
     
     while true; do
         echo -en "${COLOR_YELLOW}Enter choice [1-${#opts[@]}]: ${COLOR_NC}"
-        read -r response
+        read -r response </dev/tty
         
         if [[ -z "${response}" && -n "${default}" ]]; then
             eval "${var_name}='${default}'"
@@ -267,6 +310,12 @@ ask_step_action() {
         return 0  # Always proceed in non-interactive mode
     fi
     
+    # Ensure we have a terminal for input
+    if ! ensure_tty; then
+        log_warning "No terminal available for input, proceeding with default action"
+        return 0
+    fi
+    
     echo ""
     echo -e "${FORMAT_BOLD}This step will:${FORMAT_RESET}"
     echo -e "${description}"
@@ -274,7 +323,7 @@ ask_step_action() {
     
     while true; do
         echo -en "${COLOR_YELLOW}[Y]es, proceed  [s]kip  [q]uit and save progress: ${COLOR_NC}"
-        read -r response
+        read -r response </dev/tty
         response=$(echo "${response}" | tr '[:upper:]' '[:lower:]')
         response="${response:-y}"
         

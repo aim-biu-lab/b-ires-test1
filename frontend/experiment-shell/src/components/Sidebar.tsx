@@ -445,7 +445,7 @@ export default function Sidebar({
     const leavingGroups = prevGroups.filter(g => !currentGroups.some(cg => cg.id === g.id))
     
     setCollapsedGroups(prev => {
-      const next = new Set(prev || new Set())
+      const next = new Set<string>(prev || [])
       
       // Expand groups we're entering that have collapsedByDefault (or ancestor has it)
       for (const group of enteringGroups) {
@@ -499,14 +499,14 @@ export default function Sidebar({
       })
       // Add to collapsed set to explicitly collapse
       setCollapsedGroups(prev => {
-        const next = new Set(prev || new Set())
+        const next = new Set<string>(prev || [])
         next.add(groupId)
         return next
       })
     } else if (isInCollapsedSet) {
       // Was explicitly collapsed, now expanding
       setCollapsedGroups(prev => {
-        const next = new Set(prev || new Set())
+        const next = new Set<string>(prev || [])
         next.delete(groupId)
         return next
       })
@@ -610,7 +610,7 @@ export default function Sidebar({
       return (
         <button
           key={task.id}
-          onClick={() => onStageClick(task.id)}
+          onClick={() => onStageClick?.(task.id)}
           className={clsx(
             'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left',
             'hover:bg-muted cursor-pointer',

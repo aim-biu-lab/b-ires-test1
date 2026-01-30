@@ -40,8 +40,8 @@ function generateQuestionValue(question: QuestionConfig): unknown {
       return randomPick(RANDOM_TEXTS)
 
     case 'number': {
-      const min = question.min ?? 1
-      const max = question.max ?? 100
+      const min = typeof question.min === 'number' ? question.min : 1
+      const max = typeof question.max === 'number' ? question.max : 100
       return randomInt(min, max)
     }
 
