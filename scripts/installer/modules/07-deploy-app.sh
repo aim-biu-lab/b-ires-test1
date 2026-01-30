@@ -70,6 +70,16 @@ do_prepare_deployment() {
         return 1
     }
     
+    # Always pull latest code before building
+    if [[ -d ".git" ]]; then
+        log_info "Pulling latest code from repository..."
+        git fetch origin 2>/dev/null || true
+        git reset --hard origin/main 2>/dev/null || \
+            git reset --hard origin/master 2>/dev/null || \
+            log_warning "Could not update from remote, using existing code"
+        log_success "Code updated to latest version"
+    fi
+    
     # Ensure .env file exists
     if [[ ! -f ".env" ]]; then
         log_error ".env file not found. Please run environment configuration first."
@@ -121,10 +131,14 @@ do_build_images_normal() {
     
     local domain
     domain=$(get_config "domain" "localhost")
+    local ssl_enabled
+    ssl_enabled=$(get_config "ssl_enabled" "true")
+    local api_url="https://${domain}/api"
+    [[ "${ssl_enabled}" != "true" ]] && api_url="http://${domain}/api"
     
-    # Build all images
-    docker compose ${COMPOSE_FILES} build \
-        --build-arg VITE_API_URL="https://${domain}/api" \
+    # Build all images (--no-cache ensures we use latest code)
+    docker compose ${COMPOSE_FILES} build --no-cache \
+        --build-arg VITE_API_URL="${api_url}" \
         || {
             log_error "Docker build failed"
             return 1
@@ -147,13 +161,13 @@ do_build_images_sequential() {
     local api_url="https://${domain}/api"
     [[ "${ssl_enabled}" != "true" ]] && api_url="http://${domain}/api"
     
-    # Build services one at a time
+    # Build services one at a time (--no-cache ensures we use latest code)
     local services=("backend" "experiment-shell" "admin-dashboard")
     
     for service in "${services[@]}"; do
         log_info "Building ${service}..."
         
-        docker compose ${COMPOSE_FILES} build \
+        docker compose ${COMPOSE_FILES} build --no-cache \
             --build-arg VITE_API_URL="${api_url}" \
             "${service}" || {
                 log_error "Failed to build ${service}"
