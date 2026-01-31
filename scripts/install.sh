@@ -239,6 +239,12 @@ check_internet() {
 download_installer() {
     log_info "Downloading B-IRES installer..."
     
+    # Remove old installer directory to force fresh download
+    if [[ -d "${INSTALLER_DIR}" ]]; then
+        log_info "Removing old installer files..."
+        ${SUDO} rm -rf "${INSTALLER_DIR}"
+    fi
+    
     # Create installer directory
     ${SUDO} mkdir -p "${INSTALLER_DIR}"
     ${SUDO} chmod 755 "${INSTALLER_DIR}"
@@ -284,7 +290,9 @@ download_installer() {
         
         log_info "Downloading ${filename}..."
         
-        if ! ${SUDO} curl -fsSL "${GITHUB_RAW_BASE}/${file}" -o "${target_dir}/${filename}"; then
+        # Use cache-busting timestamp to force fresh download
+        local cache_bust="?t=$(date +%s)"
+        if ! ${SUDO} curl -fsSL "${GITHUB_RAW_BASE}/${file}${cache_bust}" -o "${target_dir}/${filename}"; then
             log_error "Failed to download ${file}"
             exit 1
         fi
