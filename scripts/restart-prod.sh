@@ -3,6 +3,9 @@
 # B-IRES Platform - Production Restart Script
 # =============================================================================
 # Restarts all B-IRES services in production mode.
+#
+# Options:
+#   --fix-permissions    Fix file ownership before restarting (requires sudo)
 # =============================================================================
 
 set -e
@@ -26,8 +29,34 @@ log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# Parse arguments
+FIX_PERMISSIONS=false
+for arg in "$@"; do
+    case $arg in
+        --fix-permissions)
+            FIX_PERMISSIONS=true
+            shift
+            ;;
+    esac
+done
+
 # Change to project directory
 cd "${PROJECT_DIR}"
+
+# Fix permissions if requested
+if [[ "${FIX_PERMISSIONS}" == "true" ]]; then
+    log_info "Fixing file permissions..."
+    if [[ $EUID -ne 0 ]]; then
+        log_warning "Permission fix requires sudo, attempting..."
+        sudo bash "${SCRIPT_DIR}/fix-permissions.sh"
+    else
+        bash "${SCRIPT_DIR}/fix-permissions.sh"
+    fi
+fi
 
 log_info "Restarting B-IRES services..."
 

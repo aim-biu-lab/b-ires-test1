@@ -125,12 +125,16 @@ do_clone_repository() {
     
     log_info "Cloning repository: ${repo}"
     
-    # Clone with depth=1 for faster clone (can do full clone later if needed)
+    # Create parent directory first
+    run_sudo mkdir -p "$(dirname "${project_dir}")"
+    run_sudo chown "${username}:${username}" "$(dirname "${project_dir}")"
+    
+    # Clone as the target user to ensure correct ownership
     if is_low_profile_mode; then
         log_info "Using shallow clone (low-profile mode)"
-        run_sudo git clone --depth 1 "${repo}" "${project_dir}"
+        sudo -u "${username}" git clone --depth 1 "${repo}" "${project_dir}"
     else
-        run_sudo git clone "${repo}" "${project_dir}"
+        sudo -u "${username}" git clone "${repo}" "${project_dir}"
     fi
     
     if [[ ! -d "${project_dir}" ]]; then
@@ -155,10 +159,13 @@ do_update_repository() {
     
     cd "${project_dir}" || return 1
     
-    # Fetch and reset to origin/main
-    run_sudo git fetch origin
-    run_sudo git reset --hard origin/main 2>/dev/null || \
-        run_sudo git reset --hard origin/master
+    # Fix permissions before git operations (in case they're broken)
+    run_sudo chown -R "${username}:${username}" "${project_dir}/.git"
+    
+    # Fetch and reset as the target user to maintain correct ownership
+    sudo -u "${username}" git fetch origin
+    sudo -u "${username}" git reset --hard origin/main 2>/dev/null || \
+        sudo -u "${username}" git reset --hard origin/master
     
     cd - > /dev/null || true
     
