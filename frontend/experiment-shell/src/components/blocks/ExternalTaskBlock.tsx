@@ -129,21 +129,7 @@ export default function ExternalTaskBlock({
   const [error, setError] = useState<string | null>(null)
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false)
   
-  // Refs
-  const externalWindowRef = useRef<Window | null>(null)
-  const socketRef = useRef<ExternalTaskSocket | null>(null)
-  const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const completionHandledRef = useRef(data._external_task_completed === true)  // Initialize based on saved state
-  const isCompletedRef = useRef(data._external_task_completed === true)  // Track completion for closures
-  
-  // Derived state - check both WebSocket status and previously saved completion flag
-  const isCompleted = taskState.status === 'completed' || data._external_task_completed === true
-  
-  // Keep the ref in sync with the derived state
-  isCompletedRef.current = isCompleted
-
-  // Log event helper
+  // Log event helper (defined early so refs can reference it)
   const logEvent = useCallback(
     (eventType: string, payload: Record<string, unknown> = {}) => {
       if (!sessionId) return
@@ -157,6 +143,22 @@ export default function ExternalTaskBlock({
     },
     [sessionId, stageId]
   )
+
+  // Refs
+  const externalWindowRef = useRef<Window | null>(null)
+  const socketRef = useRef<ExternalTaskSocket | null>(null)
+  const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const completionHandledRef = useRef(data._external_task_completed === true)  // Initialize based on saved state
+  const isCompletedRef = useRef(data._external_task_completed === true)  // Track completion for closures
+  const logEventRef = useRef(logEvent)  // Ref to avoid stale closures in WebSocket handlers
+  
+  // Derived state - check both WebSocket status and previously saved completion flag
+  const isCompleted = taskState.status === 'completed' || data._external_task_completed === true
+  
+  // Keep refs in sync with current values
+  isCompletedRef.current = isCompleted
+  logEventRef.current = logEvent
 
   // Check if we're in preview mode (session ID starts with "preview-")
   const isPreviewMode = sessionId?.startsWith('preview-') ?? false
@@ -218,9 +220,10 @@ export default function ExternalTaskBlock({
       // Preserve completed state - don't allow resetting from 'completed' to another status
       // This can happen when WebSocket reconnects or receives stale status messages
       setTaskState((prevState) => {
-        // If already completed (via WebSocket, data flag, or ref), don't reset to non-completed
-        // Use ref to avoid stale closure issues with data prop
-        const wasCompleted = prevState.status === 'completed' || isCompletedRef.current
+        // If already completed (via WebSocket state, completion handler ref, or isCompleted ref),
+        // don't reset to non-completed. Use completionHandledRef as it's set synchronously
+        // in handleTaskCompleted before the React render cycle.
+        const wasCompleted = prevState.status === 'completed' || completionHandledRef.current || isCompletedRef.current
         if (wasCompleted && state.status !== 'completed') {
           console.log('[ExternalTask] Preserving completed state, ignoring status:', state.status)
           return { ...prevState, ...state, status: 'completed', progress: 100 }
@@ -229,8 +232,8 @@ export default function ExternalTaskBlock({
       })
       
       // Handle completion (pass closeWindow flag from external task)
-      // Only handle if not already completed (use ref to check)
-      if (state.status === 'completed' && !isCompletedRef.current) {
+      // Only handle if not already completed (use completionHandledRef as it's set synchronously)
+      if (state.status === 'completed' && !completionHandledRef.current) {
         handleTaskCompleted(state.data, state.closeWindow)
       }
     })
@@ -246,7 +249,7 @@ export default function ExternalTaskBlock({
         try {
           externalWindowRef.current.close()
           setIsWindowOpen(false)
-          logEvent('external_task_window_closed_via_websocket', {})
+          logEventRef.current('external_task_window_closed_via_websocket', {})
         } catch (e) {
           console.log('[ExternalTask] Could not close window via WebSocket handler:', e)
         }
@@ -264,7 +267,7 @@ export default function ExternalTaskBlock({
       socket.disconnect()
       socketRef.current = null
     }
-  }, [taskToken, wsUrl, logEvent])
+  }, [taskToken, wsUrl])  // Removed logEvent - using ref instead to prevent socket recreation
 
   // Initialize task on mount
   useEffect(() => {
