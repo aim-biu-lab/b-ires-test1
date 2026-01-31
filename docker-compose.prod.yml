@@ -31,8 +31,10 @@ services:
 
   mongo:
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-admin}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-change_me_in_production}
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ADMIN_PASSWORD:-change_me_in_production}
+      - MONGO_USER=${MONGO_USER:-bires_admin}
+      - MONGO_PASSWORD=${MONGO_PASSWORD:-change_me_in_production}
     restart: always
 
   redis:
@@ -41,9 +43,20 @@ services:
 
   minio:
     environment:
-      - MINIO_ROOT_USER=${MINIO_USER:-admin}
-      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-change_me_in_production}
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-bires_minio_admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-change_me_in_production}
     restart: always
+
+  minio-init:
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set bires http://minio:9000 ${MINIO_ACCESS_KEY:-bires_minio_admin} ${MINIO_SECRET_KEY:-change_me_in_production};
+      mc mb --ignore-existing bires/bires-assets;
+      mc mb --ignore-existing bires/bires-logs;
+      mc anonymous set download bires/bires-assets;
+      exit 0;
+      "
 
   nginx:
     volumes:

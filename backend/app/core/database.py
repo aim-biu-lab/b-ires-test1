@@ -25,13 +25,28 @@ async def connect_db():
     """Connect to MongoDB and create indexes"""
     logger.info(f"Connecting to MongoDB at {settings.MONGO_URL}")
     
-    database.client = AsyncIOMotorClient(settings.MONGO_URL)
-    database.db = database.client[settings.MONGO_DB]
-    
-    # Create indexes
-    await create_indexes()
-    
-    logger.info("MongoDB connection established")
+    try:
+        # Create client with timeout settings
+        database.client = AsyncIOMotorClient(
+            settings.MONGO_URL,
+            serverSelectionTimeoutMS=30000,  # 30 seconds
+            connectTimeoutMS=30000,
+            socketTimeoutMS=30000
+        )
+        database.db = database.client[settings.MONGO_DB]
+        
+        # Test connection
+        await database.client.admin.command('ping')
+        logger.info("MongoDB connection successful")
+        
+        # Create indexes
+        await create_indexes()
+        
+        logger.info("MongoDB connection established")
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB: {e}")
+        logger.error(f"MongoDB URL: {settings.MONGO_URL}")
+        raise
 
 
 async def disconnect_db():

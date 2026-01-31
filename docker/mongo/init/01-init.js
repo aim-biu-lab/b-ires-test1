@@ -1,6 +1,33 @@
 // MongoDB initialization script
-// Creates default admin user on first startup
+// Creates database user and default admin user on first startup
 
+// Switch to admin database to create user
+db = db.getSiblingDB('admin');
+
+// Get credentials from environment variables
+const mongoUser = process.env.MONGO_USER || 'bires_admin';
+const mongoPassword = process.env.MONGO_PASSWORD || 'change_me_in_production';
+
+// Create application database user if not exists
+try {
+  db.createUser({
+    user: mongoUser,
+    pwd: mongoPassword,
+    roles: [
+      { role: 'readWrite', db: 'bires' },
+      { role: 'dbAdmin', db: 'bires' }
+    ]
+  });
+  print('MongoDB user created: ' + mongoUser);
+} catch (e) {
+  if (e.code === 51003) {
+    print('MongoDB user already exists: ' + mongoUser);
+  } else {
+    throw e;
+  }
+}
+
+// Switch to application database
 db = db.getSiblingDB('bires');
 
 // Create default admin user if not exists

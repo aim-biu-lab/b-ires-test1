@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
+import logging
+import sys
 
 from app.core.config import settings
 from app.core.database import connect_db, disconnect_db
@@ -13,20 +15,47 @@ from app.core.object_store import init_object_store
 
 from app.api import auth, experiments, sessions, logs, assets, users, export, monitoring, proxy, external_tasks, external_tasks_ws, templates
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle management"""
-    # Startup
-    await connect_db()
-    await connect_redis()
-    await init_object_store()
+    logger.info("Starting B-IRES backend application...")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
     
-    yield
-    
-    # Shutdown
-    await disconnect_db()
-    await disconnect_redis()
+    try:
+        # Startup
+        logger.info("Initializing database connection...")
+        await connect_db()
+        
+        logger.info("Initializing Redis connection...")
+        await connect_redis()
+        
+        logger.info("Initializing object store...")
+        await init_object_store()
+        
+        logger.info("All services initialized successfully")
+        
+        yield
+        
+        # Shutdown
+        logger.info("Shutting down application...")
+        await disconnect_db()
+        await disconnect_redis()
+        logger.info("Shutdown complete")
+    except Exception as e:
+        logger.error(f"Failed to start application: {e}", exc_info=True)
+        raise
 
 
 app = FastAPI(

@@ -23,16 +23,23 @@ async def connect_redis():
     """Connect to Redis"""
     logger.info(f"Connecting to Redis at {settings.REDIS_URL}")
     
-    redis_client.client = redis.from_url(
-        settings.REDIS_URL,
-        encoding="utf-8",
-        decode_responses=True
-    )
-    
-    # Test connection
-    await redis_client.client.ping()
-    
-    logger.info("Redis connection established")
+    try:
+        redis_client.client = redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=30,
+            socket_timeout=30
+        )
+        
+        # Test connection
+        await redis_client.client.ping()
+        
+        logger.info("Redis connection established")
+    except Exception as e:
+        logger.error(f"Failed to connect to Redis: {e}")
+        logger.error(f"Redis URL: {settings.REDIS_URL}")
+        raise
 
 
 async def disconnect_redis():

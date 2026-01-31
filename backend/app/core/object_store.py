@@ -26,23 +26,39 @@ async def init_object_store():
     """Initialize MinIO client and ensure buckets exist"""
     logger.info(f"Connecting to MinIO at {settings.MINIO_ENDPOINT}")
     
-    object_store.client = Minio(
-        settings.MINIO_ENDPOINT,
-        access_key=settings.MINIO_ACCESS_KEY,
-        secret_key=settings.MINIO_SECRET_KEY,
-        secure=settings.MINIO_SECURE
-    )
-    
-    # Ensure buckets exist
-    for bucket in [settings.MINIO_BUCKET, settings.MINIO_LOGS_BUCKET]:
+    try:
+        object_store.client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_SECURE
+        )
+        
+        # Test connection by listing buckets
         try:
-            if not object_store.client.bucket_exists(bucket):
-                object_store.client.make_bucket(bucket)
-                logger.info(f"Created bucket: {bucket}")
-        except S3Error as e:
-            logger.error(f"Error creating bucket {bucket}: {e}")
-    
-    logger.info("MinIO object store initialized")
+            object_store.client.list_buckets()
+            logger.info("MinIO connection successful")
+        except Exception as e:
+            logger.error(f"Failed to connect to MinIO: {e}")
+            logger.error(f"MinIO endpoint: {settings.MINIO_ENDPOINT}")
+            raise
+        
+        # Ensure buckets exist
+        for bucket in [settings.MINIO_BUCKET, settings.MINIO_LOGS_BUCKET]:
+            try:
+                if not object_store.client.bucket_exists(bucket):
+                    object_store.client.make_bucket(bucket)
+                    logger.info(f"Created bucket: {bucket}")
+                else:
+                    logger.info(f"Bucket already exists: {bucket}")
+            except S3Error as e:
+                logger.error(f"Error with bucket {bucket}: {e}")
+                raise
+        
+        logger.info("MinIO object store initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize object store: {e}")
+        raise
 
 
 def get_object_store() -> Minio:

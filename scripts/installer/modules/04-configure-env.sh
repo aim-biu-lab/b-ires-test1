@@ -149,6 +149,8 @@ do_create_env_file() {
     
     local jwt_secret
     jwt_secret=$(get_credential "jwt_secret" "")
+    local mongo_admin_password
+    mongo_admin_password=$(get_credential "mongo_admin_password" "")
     local mongo_password
     mongo_password=$(get_credential "mongo_password" "")
     local redis_password
@@ -178,8 +180,9 @@ JWT_EXPIRATION_HOURS=24
 # ======================
 # MongoDB
 # ======================
-MONGO_URL=mongodb://mongo:27017
+MONGO_URL=mongodb://${mongo_user}:${mongo_password}@mongo:27017/bires?authSource=admin
 MONGO_DB=bires
+MONGO_ADMIN_PASSWORD=${mongo_admin_password}
 MONGO_USER=${mongo_user}
 MONGO_PASSWORD=${mongo_password}
 
@@ -264,6 +267,7 @@ do_verify_env() {
     local required_vars=(
         "JWT_SECRET"
         "MONGO_URL"
+        "MONGO_ADMIN_PASSWORD"
         "MONGO_PASSWORD"
         "REDIS_PASSWORD"
         "MINIO_SECRET_KEY"

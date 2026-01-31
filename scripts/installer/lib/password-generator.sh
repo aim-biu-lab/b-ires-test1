@@ -104,6 +104,7 @@ generate_all_passwords() {
     log_info "Generating secure passwords..."
     
     local jwt_secret
+    local mongo_admin_password
     local mongo_password
     local redis_password
     local minio_secret_key
@@ -122,7 +123,15 @@ generate_all_passwords() {
     fi
     save_credential "jwt_secret" "${jwt_secret}"
     
-    # MongoDB Password
+    # MongoDB Admin Password (for root user)
+    mongo_admin_password=$(config_get "MONGO_ADMIN_PASSWORD" "")
+    if [[ -z "${mongo_admin_password}" ]]; then
+        mongo_admin_password=$(generate_mongo_password)
+        log_debug "Generated MONGO_ADMIN_PASSWORD"
+    fi
+    save_credential "mongo_admin_password" "${mongo_admin_password}"
+    
+    # MongoDB Password (for application user)
     mongo_password=$(config_get "MONGO_PASSWORD" "")
     if [[ -z "${mongo_password}" ]]; then
         mongo_password=$(generate_mongo_password)
@@ -343,25 +352,28 @@ display_passwords_summary() {
     echo -e "${FORMAT_BOLD}Generated Credentials Summary:${FORMAT_RESET}"
     echo -e "${COLOR_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_NC}"
     
-    local jwt_secret mongo_password redis_password minio_secret_key admin_password
+    local jwt_secret mongo_admin_password mongo_password redis_password minio_secret_key admin_password
     jwt_secret=$(get_credential "jwt_secret" "")
+    mongo_admin_password=$(get_credential "mongo_admin_password" "")
     mongo_password=$(get_credential "mongo_password" "")
     redis_password=$(get_credential "redis_password" "")
     minio_secret_key=$(get_credential "minio_secret_key" "")
     admin_password=$(get_credential "admin_password" "")
     
     if [[ "${show_passwords}" == "true" ]]; then
-        echo "  JWT Secret:       ${jwt_secret:0:20}..."
-        echo "  MongoDB Password: ${mongo_password}"
-        echo "  Redis Password:   ${redis_password}"
-        echo "  MinIO Secret Key: ${minio_secret_key}"
-        echo "  Admin Password:   ${admin_password}"
+        echo "  JWT Secret:            ${jwt_secret:0:20}..."
+        echo "  MongoDB Root Password: ${mongo_admin_password}"
+        echo "  MongoDB User Password: ${mongo_password}"
+        echo "  Redis Password:        ${redis_password}"
+        echo "  MinIO Secret Key:      ${minio_secret_key}"
+        echo "  Admin Password:        ${admin_password}"
     else
-        echo "  JWT Secret:       ****...****"
-        echo "  MongoDB Password: ********************************"
-        echo "  Redis Password:   ********************************"
-        echo "  MinIO Secret Key: ********************************"
-        echo "  Admin Password:   ****************"
+        echo "  JWT Secret:            ****...****"
+        echo "  MongoDB Root Password: ********************************"
+        echo "  MongoDB User Password: ********************************"
+        echo "  Redis Password:        ********************************"
+        echo "  MinIO Secret Key:      ********************************"
+        echo "  Admin Password:        ****************"
     fi
     
     echo ""

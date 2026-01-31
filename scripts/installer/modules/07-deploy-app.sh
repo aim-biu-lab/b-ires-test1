@@ -247,18 +247,45 @@ do_start_application() {
     
     # Wait for backend
     log_info "Waiting for backend to be ready..."
-    local max_wait=120
+    local max_iterations=60  # 60 iterations * 3 seconds = 180 seconds total
+    local sleep_time=3
     local count=0
+    local total_wait=$((max_iterations * sleep_time))
+    
+    log_info "Backend startup timeout: ${total_wait} seconds"
+    
     while ! curl -s http://localhost:8000/api/health &>/dev/null; do
-        sleep 3
+        sleep ${sleep_time}
         count=$((count + 1))
-        if [[ $count -ge $max_wait ]]; then
-            log_error "Backend failed to start within ${max_wait} seconds"
-            docker compose ${COMPOSE_FILES} logs backend
+        
+        # Show progress every 10 iterations (30 seconds)
+        if [[ $((count % 10)) -eq 0 ]]; then
+            local elapsed=$((count * sleep_time))
+            log_info "Still waiting... (${elapsed}/${total_wait} seconds elapsed)"
+        fi
+        
+        if [[ $count -ge $max_iterations ]]; then
+            log_error "Backend failed to start within ${total_wait} seconds"
+            echo ""
+            log_error "Showing backend logs:"
+            echo "================================================================"
+            docker compose ${COMPOSE_FILES} logs --tail=100 backend
+            echo "================================================================"
+            echo ""
+            log_error "Showing backend container status:"
+            docker compose ${COMPOSE_FILES} ps backend
+            echo ""
+            log_error "Troubleshooting tips:"
+            log_error "  1. Check if MongoDB is accessible: docker compose ${COMPOSE_FILES} exec backend ping mongo -c 3"
+            log_error "  2. Check if Redis is accessible: docker compose ${COMPOSE_FILES} exec backend ping redis -c 3"
+            log_error "  3. Verify .env file has correct credentials"
+            log_error "  4. Try manual backend startup: docker compose ${COMPOSE_FILES} up backend"
             return 1
         fi
     done
-    log_success "Backend is ready"
+    
+    local elapsed=$((count * sleep_time))
+    log_success "Backend is ready (started in ${elapsed} seconds)"
     
     log_success "Application services started"
 }
