@@ -251,63 +251,83 @@ do_ensure_mongodb_users() {
         return 1
     fi
     
-    # Escape special characters for use in JavaScript strings
-    # Replace backslashes first, then single quotes
-    local mongo_admin_password_escaped="${mongo_admin_password//\\/\\\\}"
-    mongo_admin_password_escaped="${mongo_admin_password_escaped//\'/\\\'}"
-    local mongo_password_escaped="${mongo_password//\\/\\\\}"
-    mongo_password_escaped="${mongo_password_escaped//\'/\\\'}"
-    local mongo_user_escaped="${mongo_user//\\/\\\\}"
-    mongo_user_escaped="${mongo_user_escaped//\'/\\\'}"
+    # Wait for MongoDB to fully initialize (not just be reachable)
+    # MongoDB with MONGO_INITDB_ROOT_USERNAME creates admin user automatically
+    log_info "Waiting for MongoDB initialization to complete..."
+    sleep 5
     
-    # Check if root admin user exists and we can authenticate
+    # Try to authenticate as admin with retries
+    # This handles the case where MongoDB is still initializing
     local admin_auth_works=false
-    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; then
-        admin_auth_works=true
-        log_success "MongoDB admin authentication working"
-    fi
+    local max_auth_attempts=10
+    local auth_attempt=0
     
-    # Check if we can connect without auth (fresh MongoDB or auth not enabled)
-    local no_auth_works=false
-    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
-        no_auth_works=true
-    fi
-    
-    if [[ "${admin_auth_works}" == "false" && "${no_auth_works}" == "false" ]]; then
-        log_error "Cannot connect to MongoDB with or without authentication"
-        return 1
-    fi
-    
-    # If no_auth works but admin_auth doesn't, we need to set up authentication
-    if [[ "${no_auth_works}" == "true" && "${admin_auth_works}" == "false" ]]; then
-        log_info "MongoDB running without authentication, setting up users..."
+    while [[ ${auth_attempt} -lt ${max_auth_attempts} ]]; do
+        auth_attempt=$((auth_attempt + 1))
         
-        # Create admin user using environment variable to avoid shell escaping issues
-        log_info "Creating MongoDB admin user..."
-        docker compose ${COMPOSE_FILES} exec -T -e MONGO_ADMIN_PWD="${mongo_admin_password}" mongo mongosh --eval '
-            db = db.getSiblingDB("admin");
-            var adminPwd = process.env.MONGO_ADMIN_PWD;
-            try {
-                db.createUser({
-                    user: "admin",
-                    pwd: adminPwd,
-                    roles: ["root"]
-                });
-                print("Admin user created successfully");
-            } catch (e) {
-                if (e.code === 51003) {
-                    print("Admin user already exists, updating password...");
-                    db.changeUserPassword("admin", adminPwd);
-                } else {
-                    throw e;
+        if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; then
+            admin_auth_works=true
+            log_success "MongoDB admin authentication working"
+            break
+        fi
+        
+        if [[ ${auth_attempt} -lt ${max_auth_attempts} ]]; then
+            log_info "Waiting for MongoDB authentication to be ready... (attempt ${auth_attempt}/${max_auth_attempts})"
+            sleep 3
+        fi
+    done
+    
+    # If admin auth still doesn't work, check if MongoDB is running without auth
+    if [[ "${admin_auth_works}" == "false" ]]; then
+        log_warning "Admin authentication failed after ${max_auth_attempts} attempts"
+        
+        # Check if we can connect without auth (fresh MongoDB without MONGO_INITDB_ROOT_* set)
+        if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+            log_info "MongoDB running without authentication, setting up users..."
+            
+            # Create admin user using environment variable to avoid shell escaping issues
+            log_info "Creating MongoDB admin user..."
+            docker compose ${COMPOSE_FILES} exec -T -e MONGO_ADMIN_PWD="${mongo_admin_password}" mongo mongosh --eval '
+                db = db.getSiblingDB("admin");
+                var adminPwd = process.env.MONGO_ADMIN_PWD;
+                try {
+                    db.createUser({
+                        user: "admin",
+                        pwd: adminPwd,
+                        roles: ["root"]
+                    });
+                    print("Admin user created successfully");
+                } catch (e) {
+                    if (e.code === 51003) {
+                        print("Admin user already exists, updating password...");
+                        db.changeUserPassword("admin", adminPwd);
+                    } else {
+                        throw e;
+                    }
                 }
+            ' || {
+                log_error "Failed to create MongoDB admin user"
+                return 1
             }
-        ' || {
-            log_error "Failed to create MongoDB admin user"
+            
+            admin_auth_works=true
+        else
+            # Both auth and no-auth failed - check if it's a password mismatch
+            log_error "Cannot connect to MongoDB"
+            log_error ""
+            log_error "Possible causes:"
+            log_error "  1. MongoDB password in .env doesn't match existing MongoDB data"
+            log_error "  2. MongoDB volume has data from a previous installation with different credentials"
+            log_error ""
+            log_error "To fix, try one of these options:"
+            log_error "  Option 1: Remove MongoDB volume and restart (WARNING: deletes all data):"
+            log_error "    docker compose ${COMPOSE_FILES} down"
+            log_error "    docker volume rm bires_mongo_data"
+            log_error "    Then re-run the installer"
+            log_error ""
+            log_error "  Option 2: Update .env with the correct MongoDB admin password"
             return 1
-        }
-        
-        admin_auth_works=true
+        fi
     fi
     
     # Now create/update the application user using environment variables
