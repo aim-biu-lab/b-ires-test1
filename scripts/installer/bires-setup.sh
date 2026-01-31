@@ -247,9 +247,11 @@ show_step_selection_menu() {
     echo "  3. Start fresh (reset all steps)"
     echo ""
     
-    local choice
-    echo -en "Enter your choice [1-3]: "
-    read -r choice </dev/tty
+    local choice=""
+    # Use exec to properly handle file descriptors
+    exec </dev/tty
+    read -p "Enter your choice [1-3]: " choice
+    choice="${choice:-1}"  # Default to 1 if empty
     
     case "${choice}" in
         1|"")
@@ -330,8 +332,7 @@ show_step_selection() {
     echo ""
     
     local choice
-    echo -en "Enter step number [0-${#STEP_NAMES[@]}]: "
-    read -r choice </dev/tty
+    read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice
     
     # Validate input
     if [[ ! "${choice}" =~ ^[0-9]+$ ]]; then
