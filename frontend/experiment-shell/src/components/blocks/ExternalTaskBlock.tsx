@@ -111,17 +111,17 @@ export default function ExternalTaskBlock({
     [configProp]
   )
   
-  // State
+  // State - initialize with saved completion status if available
   const [taskToken, setTaskToken] = useState<string | null>(null)
   const [taskUrl, setTaskUrl] = useState<string | null>(null)
   const [wsUrl, setWsUrl] = useState<string | null>(null)
-  const [taskState, setTaskState] = useState<ExternalTaskState>({
-    status: 'pending',
-    progress: 0,
+  const [taskState, setTaskState] = useState<ExternalTaskState>(() => ({
+    status: data._external_task_completed === true ? 'completed' : 'pending',
+    progress: data._external_task_completed === true ? 100 : 0,
     currentStep: null,
     externalAppConnected: false,
     data: null,
-  })
+  }))
   const [isInitializing, setIsInitializing] = useState(false)
   const [isWindowOpen, setIsWindowOpen] = useState(false)
   const [hasTimedOut, setHasTimedOut] = useState(false)
@@ -134,10 +134,14 @@ export default function ExternalTaskBlock({
   const socketRef = useRef<ExternalTaskSocket | null>(null)
   const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const completionHandledRef = useRef(false)  // Guard against double completion
+  const completionHandledRef = useRef(data._external_task_completed === true)  // Initialize based on saved state
+  const isCompletedRef = useRef(data._external_task_completed === true)  // Track completion for closures
   
   // Derived state - check both WebSocket status and previously saved completion flag
   const isCompleted = taskState.status === 'completed' || data._external_task_completed === true
+  
+  // Keep the ref in sync with the derived state
+  isCompletedRef.current = isCompleted
 
   // Log event helper
   const logEvent = useCallback(
@@ -211,10 +215,22 @@ export default function ExternalTaskBlock({
     
     // Handle status changes
     const unsubStatus = socket.onStatusChange((state) => {
-      setTaskState(state)
+      // Preserve completed state - don't allow resetting from 'completed' to another status
+      // This can happen when WebSocket reconnects or receives stale status messages
+      setTaskState((prevState) => {
+        // If already completed (via WebSocket, data flag, or ref), don't reset to non-completed
+        // Use ref to avoid stale closure issues with data prop
+        const wasCompleted = prevState.status === 'completed' || isCompletedRef.current
+        if (wasCompleted && state.status !== 'completed') {
+          console.log('[ExternalTask] Preserving completed state, ignoring status:', state.status)
+          return { ...prevState, ...state, status: 'completed', progress: 100 }
+        }
+        return state
+      })
       
       // Handle completion (pass closeWindow flag from external task)
-      if (state.status === 'completed') {
+      // Only handle if not already completed (use ref to check)
+      if (state.status === 'completed' && !isCompletedRef.current) {
         handleTaskCompleted(state.data, state.closeWindow)
       }
     })
