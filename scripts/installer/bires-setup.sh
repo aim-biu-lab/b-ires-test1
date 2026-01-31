@@ -231,6 +231,134 @@ execute_module() {
     return $?
 }
 
+# Show step selection menu
+show_step_selection_menu() {
+    echo ""
+    echo -e "${FORMAT_BOLD}Installation Options:${FORMAT_RESET}"
+    echo ""
+    echo "  1. Continue from next incomplete step (default)"
+    echo "  2. Choose a specific step to start from"
+    echo "  3. Start fresh (reset all steps)"
+    echo ""
+    
+    local choice
+    read -p "Enter your choice [1-3]: " choice
+    
+    case "${choice}" in
+        1|"")
+            # Continue normally
+            return 0
+            ;;
+        2)
+            # Show step selection
+            show_step_selection
+            return $?
+            ;;
+        3)
+            # Reset all and start fresh
+            if ask_yes_no "This will reset all progress. Are you sure?"; then
+                reset_state
+                echo ""
+                log_success "State reset. Starting fresh installation."
+                echo ""
+                return 0
+            else
+                return 1
+            fi
+            ;;
+        *)
+            log_error "Invalid choice"
+            return 1
+            ;;
+    esac
+}
+
+# Show individual step selection
+show_step_selection() {
+    echo ""
+    echo -e "${FORMAT_BOLD}Select a step to start from:${FORMAT_RESET}"
+    echo ""
+    
+    local i=1
+    for step_name in "${STEP_NAMES[@]}"; do
+        local status
+        status=$(get_step_status "${step_name}")
+        local status_icon
+        local status_color
+        
+        case "${status}" in
+            completed)
+                status_icon="✓"
+                status_color="${COLOR_GREEN}"
+                ;;
+            skipped)
+                status_icon="○"
+                status_color="${COLOR_GRAY}"
+                ;;
+            in_progress)
+                status_icon="▶"
+                status_color="${COLOR_YELLOW}"
+                ;;
+            failed)
+                status_icon="✗"
+                status_color="${COLOR_RED}"
+                ;;
+            *)
+                status_icon="○"
+                status_color="${COLOR_WHITE}"
+                ;;
+        esac
+        
+        # Format step name
+        local display_name
+        display_name=$(echo "${step_name}" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
+        
+        echo -e "  ${status_color}${status_icon}${COLOR_NC} ${i}. ${display_name}"
+        
+        ((i++))
+    done
+    
+    echo ""
+    echo "  0. Cancel and return to previous menu"
+    echo ""
+    
+    local choice
+    read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice
+    
+    # Validate input
+    if [[ ! "${choice}" =~ ^[0-9]+$ ]]; then
+        log_error "Invalid input. Please enter a number."
+        return 1
+    fi
+    
+    if [[ "${choice}" -eq 0 ]]; then
+        return 1
+    fi
+    
+    if [[ "${choice}" -lt 1 || "${choice}" -gt "${#STEP_NAMES[@]}" ]]; then
+        log_error "Invalid step number"
+        return 1
+    fi
+    
+    # Reset from selected step onwards
+    local step_index=$((choice - 1))
+    local selected_step="${STEP_NAMES[$step_index]}"
+    local display_name
+    display_name=$(echo "${selected_step}" | sed 's/_/ /g' | sed 's/\b\(.\)/\u\1/g')
+    
+    echo ""
+    echo "This will reset '${display_name}' and all subsequent steps."
+    if ask_yes_no "Are you sure?"; then
+        reset_from_step "${step_index}"
+        echo ""
+        log_success "Steps reset. Installation will start from step ${choice}."
+        echo ""
+        return 0
+    else
+        return 1
+    fi
+}
+
 run_all_modules() {
     for module in "${MODULES[@]}"; do
         local step_name
@@ -404,10 +532,9 @@ main() {
         exit 0
     fi
     
-    # Ask to start/continue
+    # Ask to start/continue with step selection
     if [[ "${NON_INTERACTIVE}" != "true" ]]; then
-        echo ""
-        if ! ask_yes_no "Start installation?"; then
+        if ! show_step_selection_menu; then
             log_info "Installation cancelled"
             exit 0
         fi

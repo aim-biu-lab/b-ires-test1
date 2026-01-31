@@ -423,6 +423,44 @@ reset_state() {
     init_state
 }
 
+# Reset from a specific step onwards
+reset_from_step() {
+    local start_index="$1"
+    
+    acquire_lock
+    
+    if command -v jq &> /dev/null; then
+        local tmp_file
+        tmp_file=$(mktemp)
+        local timestamp
+        timestamp=$(date -Iseconds)
+        
+        # Build jq command to reset steps
+        local jq_cmd=".updated_at = \"${timestamp}\""
+        
+        local i=0
+        for step in "${STEP_NAMES[@]}"; do
+            if [[ $i -ge $start_index ]]; then
+                jq_cmd+=" | .steps.${step}.status = \"pending\" | .steps.${step}.completed_at = \"\""
+            fi
+            ((i++))
+        done
+        
+        jq "${jq_cmd}" "${STATE_FILE}" > "${tmp_file}" 2>/dev/null
+        
+        if [[ -s "${tmp_file}" ]]; then
+            mv "${tmp_file}" "${STATE_FILE}"
+            chmod 600 "${STATE_FILE}"
+        else
+            rm -f "${tmp_file}"
+        fi
+    fi
+    
+    release_lock
+    
+    log_to_file "STATE" "Reset steps from index ${start_index}"
+}
+
 # Display resume prompt
 prompt_resume() {
     if has_previous_state && ! is_installation_complete; then
