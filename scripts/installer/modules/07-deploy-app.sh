@@ -453,7 +453,40 @@ do_start_nginx() {
     
     local project_dir
     project_dir=$(get_config "project_dir" "")
+    local domain
+    domain=$(get_config "domain" "")
+    local ssl_enabled
+    ssl_enabled=$(get_config "ssl_enabled" "true")
+    
     cd "${project_dir}" || return 1
+    
+    # Pre-flight checks for production mode
+    if [[ "${ssl_enabled}" == "true" && -n "${domain}" ]]; then
+        log_info "Checking SSL certificate for ${domain}..."
+        
+        local cert_path="/etc/letsencrypt/live/${domain}/fullchain.pem"
+        local key_path="/etc/letsencrypt/live/${domain}/privkey.pem"
+        
+        if [[ ! -f "${cert_path}" ]]; then
+            log_error "SSL certificate not found: ${cert_path}"
+            log_error "Nginx cannot start in production mode without SSL certificates"
+            log_error ""
+            log_error "To fix this, you have two options:"
+            log_error "  1. Obtain SSL certificate first:"
+            log_error "     sudo certbot certonly --standalone -d ${domain} -d www.${domain}"
+            log_error ""
+            log_error "  2. Or re-run Module 05 (SSL Setup):"
+            log_error "     sudo bash ${SCRIPT_DIR}/modules/05-ssl-setup.sh"
+            return 1
+        fi
+        
+        if [[ ! -f "${key_path}" ]]; then
+            log_error "SSL private key not found: ${key_path}"
+            return 1
+        fi
+        
+        log_success "SSL certificate found for ${domain}"
+    fi
     
     docker compose ${COMPOSE_FILES} up -d nginx
     
@@ -462,7 +495,28 @@ do_start_nginx() {
     
     if ! docker compose ${COMPOSE_FILES} ps nginx | grep -q "Up"; then
         log_error "Nginx failed to start"
-        docker compose ${COMPOSE_FILES} logs nginx
+        echo ""
+        log_error "Showing nginx logs:"
+        echo "================================================================"
+        docker compose ${COMPOSE_FILES} logs --tail=50 nginx
+        echo "================================================================"
+        echo ""
+        
+        # Check for common issues
+        if docker compose ${COMPOSE_FILES} logs nginx 2>&1 | grep -q "cannot load certificate"; then
+            log_error "Issue: SSL certificate problem detected"
+            log_error ""
+            log_error "Possible causes:"
+            log_error "  1. SSL certificate not obtained for domain: ${domain}"
+            log_error "  2. Nginx config has wrong domain name"
+            log_error "  3. Certificate files have wrong permissions"
+            log_error ""
+            log_error "To debug:"
+            log_error "  - Check if certificate exists: ls -la /etc/letsencrypt/live/${domain}/"
+            log_error "  - Check nginx config: grep ${domain} ${project_dir}/nginx/nginx.prod.conf"
+            log_error "  - Run Module 05: sudo bash ${SCRIPT_DIR}/modules/05-ssl-setup.sh"
+        fi
+        
         return 1
     fi
     
@@ -551,6 +605,17 @@ run_module() {
     fi
     
     mark_step_started "${MODULE_NAME}"
+    
+    # Verify prerequisites
+    if ! is_step_done "configure_env"; then
+        log_warning "Module 04 (Environment Configuration) has not been completed"
+        log_warning "This may cause deployment issues if .env file is incomplete"
+    fi
+    
+    if ! is_step_done "nginx_config"; then
+        log_warning "Module 06 (Nginx Configuration) has not been completed"
+        log_warning "Nginx may fail to start if configuration is incorrect"
+    fi
     
     # Prepare deployment
     if ! do_prepare_deployment; then

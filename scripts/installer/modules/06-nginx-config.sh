@@ -87,6 +87,13 @@ do_update_prod_config() {
         return 0
     fi
     
+    # Validate domain is set
+    if [[ -z "${domain}" ]]; then
+        log_error "Domain is not configured. Cannot update nginx configuration."
+        log_error "Please ensure Module 04 (Environment Configuration) completed successfully."
+        return 1
+    fi
+    
     local nginx_conf="${project_dir}/nginx/nginx.prod.conf"
     
     log_info "Updating nginx.prod.conf with domain: ${domain}"
@@ -98,14 +105,17 @@ do_update_prod_config() {
         return $?
     fi
     
+    # Update domain placeholder
+    run_sudo sed -i "s/DOMAIN_PLACEHOLDER/${domain}/g" "${nginx_conf}"
+    
     # Update domain in server_name directives
-    run_sudo sed -i "s/server_name .*;/server_name ${domain} www.${domain};/g" "${nginx_conf}"
+    run_sudo sed -i "s/server_name _;/server_name ${domain} www.${domain};/g" "${nginx_conf}"
     
-    # Update SSL certificate paths
-    run_sudo sed -i "s|ssl_certificate .*;|ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;|g" "${nginx_conf}"
-    run_sudo sed -i "s|ssl_certificate_key .*;|ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;|g" "${nginx_conf}"
+    # Update SSL certificate paths (in case placeholder replacement didn't catch everything)
+    run_sudo sed -i "s|ssl_certificate /etc/letsencrypt/live/[^/]*/fullchain.pem;|ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;|g" "${nginx_conf}"
+    run_sudo sed -i "s|ssl_certificate_key /etc/letsencrypt/live/[^/]*/privkey.pem;|ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;|g" "${nginx_conf}"
     
-    log_success "nginx.prod.conf updated"
+    log_success "nginx.prod.conf updated with domain: ${domain}"
 }
 
 do_create_prod_config() {
@@ -114,9 +124,16 @@ do_create_prod_config() {
     local domain
     domain=$(get_config "domain" "")
     
+    # Validate domain is set
+    if [[ -z "${domain}" ]]; then
+        log_error "Domain is not configured. Cannot create nginx configuration."
+        log_error "Please ensure Module 04 (Environment Configuration) completed successfully."
+        return 1
+    fi
+    
     local nginx_conf="${project_dir}/nginx/nginx.prod.conf"
     
-    log_info "Creating production nginx configuration..."
+    log_info "Creating production nginx configuration for domain: ${domain}..."
     
     run_sudo tee "${nginx_conf}" > /dev/null << EOF
 # B-IRES Production Nginx Configuration
@@ -179,8 +196,9 @@ http {
 
     # Main HTTPS server
     server {
-        listen 443 ssl http2;
-        listen [::]:443 ssl http2;
+        listen 443 ssl;
+        listen [::]:443 ssl;
+        http2 on;
         server_name ${domain} www.${domain};
 
         # SSL Configuration
@@ -311,6 +329,8 @@ do_verify_config() {
     project_dir=$(get_config "project_dir" "")
     local ssl_enabled
     ssl_enabled=$(get_config "ssl_enabled" "true")
+    local domain
+    domain=$(get_config "domain" "")
     
     log_info "Verifying nginx configuration..."
     
@@ -324,6 +344,23 @@ do_verify_config() {
     if [[ ! -f "${config_file}" ]]; then
         log_error "Nginx configuration file not found: ${config_file}"
         return 1
+    fi
+    
+    # Check if domain placeholder is still present
+    if [[ "${ssl_enabled}" == "true" ]]; then
+        if grep -q "DOMAIN_PLACEHOLDER\|yourdomain.com" "${config_file}" 2>/dev/null; then
+            log_error "Domain placeholder not replaced in nginx configuration!"
+            log_error "Found 'DOMAIN_PLACEHOLDER' or 'yourdomain.com' in ${config_file}"
+            log_error "Expected domain: ${domain}"
+            return 1
+        fi
+        
+        # Verify domain is in the config
+        if ! grep -q "${domain}" "${config_file}" 2>/dev/null; then
+            log_warning "Domain '${domain}' not found in nginx configuration"
+        else
+            log_success "Domain '${domain}' configured correctly"
+        fi
     fi
     
     # Basic syntax check (nginx -t requires running nginx)
@@ -372,6 +409,34 @@ run_module() {
     fi
     
     mark_step_started "${MODULE_NAME}"
+    
+    # Verify prerequisites
+    local domain
+    domain=$(get_config "domain" "")
+    local project_dir
+    project_dir=$(get_config "project_dir" "")
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not configured"
+        log_error "Module 03 (Clone Project) must be completed first"
+        mark_step_failed "${MODULE_NAME}"
+        return 1
+    fi
+    
+    if [[ ! -d "${project_dir}" ]]; then
+        log_error "Project directory does not exist: ${project_dir}"
+        mark_step_failed "${MODULE_NAME}"
+        return 1
+    fi
+    
+    if [[ -z "${domain}" ]]; then
+        log_error "Domain not configured"
+        log_error "Module 04 (Environment Configuration) must be completed first"
+        mark_step_failed "${MODULE_NAME}"
+        return 1
+    fi
+    
+    log_info "Prerequisites verified - Domain: ${domain}, Project: ${project_dir}"
     
     # Execute steps
     local steps=(
