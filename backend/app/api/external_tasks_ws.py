@@ -487,6 +487,30 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             event_type=EventType.EXTERNAL_TASK_COMMAND_ACK.value,
             payload={"command": command, "success": success},
         )
+    
+    elif msg_type == WSMessageType.CLOSE_WINDOW_REQUEST.value:
+        # External task requests parent to close its popup window
+        # This handles cross-domain window closing when window.close() doesn't work
+        # Flow: Parent sends close command -> Child receives, calls _closeWindow() ->
+        #       Child sends close_window_request via WebSocket -> Parent closes popup
+        logger.info(f"External app requested window close for task {task_token}")
+        
+        # Forward to shell so it can close the popup window
+        await manager.send_to_shell(task_token, {
+            "type": WSMessageType.CLOSE_WINDOW_REQUEST.value,
+            "timestamp": now.isoformat(),
+        })
+        
+        # Log event
+        await log_event(
+            session_id=task_data["session_id"],
+            experiment_id=task_data["experiment_id"],
+            user_id=task_data["user_id"],
+            participant_number=task_data["participant_number"],
+            stage_id=task_data["stage_id"],
+            event_type="external_task_close_window_request",
+            payload={},
+        )
 
 
 

@@ -219,6 +219,24 @@ export default function ExternalTaskBlock({
       }
     })
     
+    // Handle close_window_request from external task
+    // This handles cross-domain window closing when window.close() doesn't work
+    // Flow: Parent sends close command -> Child receives, calls _closeWindow() ->
+    //       Child sends close_window_request via WebSocket -> Parent closes popup
+    const unsubCloseRequest = socket.on('close_window_request', () => {
+      console.log('[ExternalTask] Received close_window_request from external task via WebSocket')
+      
+      if (externalWindowRef.current && !externalWindowRef.current.closed) {
+        try {
+          externalWindowRef.current.close()
+          setIsWindowOpen(false)
+          logEvent('external_task_window_closed_via_websocket', {})
+        } catch (e) {
+          console.log('[ExternalTask] Could not close window via WebSocket handler:', e)
+        }
+      }
+    })
+    
     // Connect
     socket.connect().catch((err) => {
       console.error('[ExternalTask] WebSocket connection error:', err)
@@ -226,10 +244,11 @@ export default function ExternalTaskBlock({
     
     return () => {
       unsubStatus()
+      unsubCloseRequest()
       socket.disconnect()
       socketRef.current = null
     }
-  }, [taskToken, wsUrl])
+  }, [taskToken, wsUrl, logEvent])
 
   // Initialize task on mount
   useEffect(() => {

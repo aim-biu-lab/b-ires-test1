@@ -52,6 +52,7 @@ class WSMessageType(str, Enum):
     PROGRESS = "progress"                 # Progress update
     COMPLETE = "complete"                 # Task completed
     COMMAND_ACK = "command_ack"           # Command acknowledgment
+    CLOSE_WINDOW_REQUEST = "close_window_request"  # Request parent to close popup window
     
     # From platform to external app
     INIT = "init"                         # Initialize with config
