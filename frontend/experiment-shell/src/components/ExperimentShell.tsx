@@ -182,7 +182,7 @@ export default function ExperimentShell() {
     if (sessionId) {
       eventQueue.addEvent({
         sessionId,
-        eventType: 'stage_timeout',
+        eventType: 'timeout',
         stageId: currentStage.id,
         payload: {
           action,
