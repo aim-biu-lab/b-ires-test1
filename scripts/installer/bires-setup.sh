@@ -487,6 +487,13 @@ EOF
     echo "  3. Set up regular backups (see ${project_dir}/scripts/backup-bires.sh)"
     
     echo ""
+    echo -e "${COLOR_YELLOW}Important:${COLOR_NC}"
+    echo "  The user '${username}' has been added to the 'docker' group."
+    echo "  To use docker commands without sudo, please:"
+    echo "    - Log out and log back in, OR"
+    echo "    - Run: newgrp docker"
+    
+    echo ""
     echo -e "${COLOR_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_NC}"
     echo ""
     

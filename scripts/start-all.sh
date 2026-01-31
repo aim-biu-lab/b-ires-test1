@@ -13,6 +13,18 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Determine if we need sudo for docker commands
+DOCKER_CMD="docker"
+if ! docker info &>/dev/null 2>&1; then
+    if sudo docker info &>/dev/null 2>&1; then
+        DOCKER_CMD="sudo docker"
+        echo -e "${YELLOW}Using sudo for docker commands (tip: log out and back in to use docker without sudo)${NC}"
+    else
+        echo -e "${RED}Cannot connect to Docker. Please ensure Docker is running and you have permission to access it.${NC}"
+        exit 1
+    fi
+fi
+
 # Required ports for all services
 REQUIRED_PORTS=(
     "8000:Backend API"
@@ -75,7 +87,7 @@ echo -e "${YELLOW}Starting services with docker compose...${NC}"
 echo ""
 
 # Start all services except nginx (disabled in dev mode)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --scale nginx=0
+${DOCKER_CMD} compose -f docker-compose.yml -f docker-compose.dev.yml up -d --scale nginx=0
 
 echo ""
 echo -e "${GREEN}========================================${NC}"

@@ -34,6 +34,18 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Determine if we need sudo for docker commands
+DOCKER_CMD="docker"
+if ! docker info &>/dev/null 2>&1; then
+    if sudo docker info &>/dev/null 2>&1; then
+        DOCKER_CMD="sudo docker"
+        log_info "Using sudo for docker commands (tip: log out and back in to use docker without sudo)"
+    else
+        log_error "Cannot connect to Docker. Please ensure Docker is running and you have permission to access it."
+        exit 1
+    fi
+fi
+
 # Change to project directory
 cd "${PROJECT_DIR}"
 
@@ -70,12 +82,12 @@ fi
 
 # Start infrastructure services first
 log_info "Starting infrastructure services..."
-docker compose ${COMPOSE_FILES} up -d mongo redis minio minio-init
+${DOCKER_CMD} compose ${COMPOSE_FILES} up -d mongo redis minio minio-init
 
 # Wait for MongoDB to be ready
 log_info "Waiting for MongoDB..."
 for i in {1..30}; do
-    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+    if ${DOCKER_CMD} compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
         log_success "MongoDB is ready"
         break
     fi
@@ -85,7 +97,7 @@ done
 # Wait for Redis to be ready
 log_info "Waiting for Redis..."
 for i in {1..15}; do
-    if docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; then
+    if ${DOCKER_CMD} compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; then
         log_success "Redis is ready"
         break
     fi
@@ -94,7 +106,7 @@ done
 
 # Start application services
 log_info "Starting application services..."
-docker compose ${COMPOSE_FILES} up -d backend experiment-shell admin-dashboard
+${DOCKER_CMD} compose ${COMPOSE_FILES} up -d backend experiment-shell admin-dashboard
 
 # Wait for backend to be ready
 log_info "Waiting for backend..."
@@ -108,7 +120,7 @@ done
 
 # Start nginx
 log_info "Starting nginx..."
-docker compose ${COMPOSE_FILES} up -d nginx
+${DOCKER_CMD} compose ${COMPOSE_FILES} up -d nginx
 
 # Wait for nginx
 sleep 3
@@ -116,7 +128,7 @@ sleep 3
 # Show status
 echo ""
 log_info "Service Status:"
-docker compose ${COMPOSE_FILES} ps
+${DOCKER_CMD} compose ${COMPOSE_FILES} ps
 
 # Get domain
 DOMAIN=$(grep "^API_URL=" .env 2>/dev/null | sed 's|.*://||' | sed 's|/.*||' || echo "localhost")
@@ -137,4 +149,4 @@ else
 fi
 
 echo ""
-echo "View logs: docker compose ${COMPOSE_FILES} logs -f"
+echo "View logs: ${DOCKER_CMD} compose ${COMPOSE_FILES} logs -f"

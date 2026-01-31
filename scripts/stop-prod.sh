@@ -30,6 +30,21 @@ log_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Determine if we need sudo for docker commands
+DOCKER_CMD="docker"
+if ! docker info &>/dev/null 2>&1; then
+    if sudo docker info &>/dev/null 2>&1; then
+        DOCKER_CMD="sudo docker"
+    else
+        log_error "Cannot connect to Docker. Please ensure Docker is running and you have permission to access it."
+        exit 1
+    fi
+fi
+
 # Change to project directory
 cd "${PROJECT_DIR}"
 
@@ -49,12 +64,12 @@ fi
 log_info "Stopping B-IRES services..."
 
 # Stop all services
-docker compose ${COMPOSE_FILES} down
+${DOCKER_CMD} compose ${COMPOSE_FILES} down
 
 log_success "All B-IRES services stopped"
 
 # Show any remaining containers
-REMAINING=$(docker ps --filter "name=bires" --format "{{.Names}}" 2>/dev/null)
+REMAINING=$(${DOCKER_CMD} ps --filter "name=bires" --format "{{.Names}}" 2>/dev/null)
 if [[ -n "${REMAINING}" ]]; then
     log_warning "Some containers may still be running:"
     echo "${REMAINING}"
