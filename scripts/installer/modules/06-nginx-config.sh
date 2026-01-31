@@ -21,6 +21,27 @@ source "${SCRIPT_DIR}/lib/config-parser.sh"
 # =============================================================================
 
 should_run() {
+    local project_dir
+    project_dir=$(get_config "project_dir" "")
+    local ssl_enabled
+    ssl_enabled=$(get_config "ssl_enabled" "true")
+    
+    local config_file
+    if [[ "${ssl_enabled}" == "true" ]]; then
+        config_file="${project_dir}/nginx/nginx.prod.conf"
+    else
+        config_file="${project_dir}/nginx/nginx.test.conf"
+    fi
+    
+    # Check if config file still has placeholder (might have been reset by git)
+    if [[ -f "${config_file}" ]] && grep -q "DOMAIN_PLACEHOLDER" "${config_file}" 2>/dev/null; then
+        log_warning "Nginx config still has DOMAIN_PLACEHOLDER (may have been reset by git pull)"
+        log_info "Re-running nginx configuration to update domain..."
+        # Reset step status to allow re-run
+        mark_step_pending "${MODULE_NAME}" 2>/dev/null || true
+        return 0
+    fi
+    
     if is_step_done "${MODULE_NAME}"; then
         log_info "Nginx configuration already completed"
         return 1

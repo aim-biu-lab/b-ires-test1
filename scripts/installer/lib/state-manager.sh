@@ -253,6 +253,13 @@ mark_step_failed() {
     log_to_file "STATE" "Step ${step_name} failed"
 }
 
+# Mark step as pending (reset to initial state)
+mark_step_pending() {
+    local step_name="$1"
+    set_step_status "${step_name}" "pending"
+    log_to_file "STATE" "Step ${step_name} reset to pending"
+}
+
 # Check if step is completed or skipped
 is_step_done() {
     local step_name="$1"
