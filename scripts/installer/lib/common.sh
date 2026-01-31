@@ -551,6 +551,177 @@ is_service_running() {
     systemctl is-active --quiet "${service}"
 }
 
+# =============================================================================
+# Docker Compose Service Management
+# =============================================================================
+
+# Check if a Docker Compose service/container is running
+is_docker_service_running() {
+    local service="$1"
+    local project_dir="${2:-$(get_config 'project_dir' '')}"
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not specified"
+        return 1
+    fi
+    
+    cd "${project_dir}" || return 1
+    
+    # Get compose files
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
+    local compose_files
+    if [[ "${compose_mode}" == "production" ]]; then
+        compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+    else
+        compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+    fi
+    
+    # Check if container is running
+    if docker compose ${compose_files} ps "${service}" 2>/dev/null | grep -q "Up"; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# Ensure a Docker Compose service is running (start if not)
+ensure_docker_service() {
+    local service="$1"
+    local project_dir="${2:-$(get_config 'project_dir' '')}"
+    local max_wait="${3:-60}"
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not specified"
+        return 1
+    fi
+    
+    cd "${project_dir}" || return 1
+    
+    # Get compose files
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
+    local compose_files
+    if [[ "${compose_mode}" == "production" ]]; then
+        compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+    else
+        compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+    fi
+    
+    # Check if service is already running
+    if is_docker_service_running "${service}" "${project_dir}"; then
+        log_info "Service '${service}' is already running"
+        return 0
+    fi
+    
+    # Start the service
+    log_info "Starting service '${service}'..."
+    if ! docker compose ${compose_files} up -d "${service}"; then
+        log_error "Failed to start service '${service}'"
+        return 1
+    fi
+    
+    log_success "Service '${service}' started"
+    return 0
+}
+
+# Wait for backend service to be healthy
+wait_for_backend() {
+    local project_dir="${1:-$(get_config 'project_dir' '')}"
+    local max_wait="${2:-120}"
+    
+    log_info "Waiting for backend service to be healthy..."
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not specified"
+        return 1
+    fi
+    
+    cd "${project_dir}" || return 1
+    
+    # Ensure backend is running
+    if ! ensure_docker_service "backend" "${project_dir}"; then
+        log_error "Failed to ensure backend service is running"
+        return 1
+    fi
+    
+    # Wait for health endpoint
+    local count=0
+    local wait_interval=3
+    local max_attempts=$((max_wait / wait_interval))
+    
+    while ! curl -s http://localhost:8000/health &>/dev/null; do
+        sleep ${wait_interval}
+        count=$((count + 1))
+        
+        if [[ $count -ge $max_attempts ]]; then
+            log_error "Backend not responding after ${max_wait} seconds"
+            log_info "Checking backend container status..."
+            docker compose ps backend
+            log_info "Recent backend logs:"
+            docker compose logs --tail=30 backend
+            return 1
+        fi
+        
+        # Show progress every 10 seconds
+        if [[ $((count % (10 / wait_interval))) -eq 0 ]]; then
+            log_info "Still waiting for backend... ($((count * wait_interval))s/${max_wait}s)"
+        fi
+    done
+    
+    log_success "Backend is ready and healthy"
+    return 0
+}
+
+# Wait for MongoDB service to be healthy
+wait_for_mongodb() {
+    local project_dir="${1:-$(get_config 'project_dir' '')}"
+    local max_wait="${2:-60}"
+    
+    log_info "Waiting for MongoDB service to be healthy..."
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not specified"
+        return 1
+    fi
+    
+    cd "${project_dir}" || return 1
+    
+    # Ensure MongoDB is running
+    if ! ensure_docker_service "mongo" "${project_dir}"; then
+        log_error "Failed to ensure MongoDB service is running"
+        return 1
+    fi
+    
+    # Get compose files
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
+    local compose_files
+    if [[ "${compose_mode}" == "production" ]]; then
+        compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+    else
+        compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+    fi
+    
+    # Wait for MongoDB to be ready
+    local count=0
+    local wait_interval=2
+    local max_attempts=$((max_wait / wait_interval))
+    
+    while ! docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+        sleep ${wait_interval}
+        count=$((count + 1))
+        
+        if [[ $count -ge $max_attempts ]]; then
+            log_error "MongoDB not responding after ${max_wait} seconds"
+            return 1
+        fi
+    done
+    
+    log_success "MongoDB is ready and healthy"
+    return 0
+}
+
 # Validate email format
 is_valid_email() {
     local email="$1"

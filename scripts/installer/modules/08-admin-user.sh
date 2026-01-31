@@ -35,6 +35,7 @@ get_description() {
     admin_username=$(get_config "admin_username" "admin")
     
     cat << EOF
+  - Ensure MongoDB and backend services are running
   - Create admin user account in B-IRES database
   - Email: ${admin_email}
   - Username: ${admin_username}
@@ -47,26 +48,31 @@ EOF
 # Admin User Functions
 # =============================================================================
 
-do_wait_for_backend() {
-    log_info "Waiting for backend service..."
+do_ensure_dependencies() {
+    log_info "Ensuring required services are running..."
     
     local project_dir
     project_dir=$(get_config "project_dir" "")
-    cd "${project_dir}" || return 1
     
-    local max_wait=60
-    local count=0
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not found in config"
+        return 1
+    fi
     
-    while ! curl -s http://localhost:8000/health &>/dev/null; do
-        sleep 2
-        count=$((count + 1))
-        if [[ $count -ge $max_wait ]]; then
-            log_error "Backend not responding after ${max_wait} seconds"
-            return 1
-        fi
-    done
+    # Ensure MongoDB is running and healthy
+    if ! wait_for_mongodb "${project_dir}"; then
+        log_error "Failed to ensure MongoDB is running"
+        return 1
+    fi
     
-    log_success "Backend is ready"
+    # Ensure backend is running and healthy
+    if ! wait_for_backend "${project_dir}"; then
+        log_error "Failed to ensure backend is running"
+        return 1
+    fi
+    
+    log_success "All required services are ready"
+    return 0
 }
 
 do_create_admin_via_api() {
@@ -85,11 +91,23 @@ do_create_admin_via_api() {
         return 1
     fi
     
+    cd "${project_dir}" || return 1
+    
+    # Get compose files
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
+    local compose_files
+    if [[ "${compose_mode}" == "production" ]]; then
+        compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+    else
+        compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+    fi
+    
     log_info "Creating admin user via MongoDB..."
     
     # Generate bcrypt hash for password using Python in the container
     local password_hash
-    password_hash=$(docker compose exec -T backend python3 -c "
+    password_hash=$(docker compose ${compose_files} exec -T backend python3 -c "
 from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 print(pwd_context.hash('${admin_password}'))
@@ -122,9 +140,7 @@ except ImportError:
     local timestamp
     timestamp=$(date -Iseconds)
     
-    cd "${project_dir}" || return 1
-    
-    docker compose exec -T mongo mongosh bires --quiet --eval "
+    docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
         // Check if user exists by email or username
         var existingUserByEmail = db.users.findOne({email: '${admin_email}'});
         var existingUserByUsername = db.users.findOne({username: '${admin_username}'});
@@ -179,11 +195,21 @@ do_disable_default_admin() {
     
     cd "${project_dir}" || return 1
     
+    # Get compose files
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
+    local compose_files
+    if [[ "${compose_mode}" == "production" ]]; then
+        compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+    else
+        compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+    fi
+    
     # Only disable default admin if a different admin email is configured
     if [[ "${admin_email}" != "admin@example.com" ]]; then
         log_info "Disabling default admin account..."
         
-        docker compose exec -T mongo mongosh bires --quiet --eval "
+        docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
             db.users.updateOne(
                 {email: 'admin@example.com'},
                 {\$set: {is_active: false, updated_at: new Date()}}
@@ -220,8 +246,18 @@ do_verify_admin() {
         project_dir=$(get_config "project_dir" "")
         cd "${project_dir}" || return 1
         
+        # Get compose files
+        local compose_mode
+        compose_mode=$(get_config "compose_mode" "production")
+        local compose_files
+        if [[ "${compose_mode}" == "production" ]]; then
+            compose_files="-f docker-compose.yml -f docker-compose.prod.yml"
+        else
+            compose_files="-f docker-compose.yml -f docker-compose.test.yml"
+        fi
+        
         local user_check
-        user_check=$(docker compose exec -T mongo mongosh bires --quiet --eval "
+        user_check=$(docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
             var user = db.users.findOne({email: '${admin_email}'});
             if (user) {
                 print('User found: ' + user.email + ', active: ' + user.is_active + ', role: ' + user.role);
@@ -297,7 +333,7 @@ run_module() {
     
     # Execute steps
     local steps=(
-        "do_wait_for_backend:Waiting for backend"
+        "do_ensure_dependencies:Ensuring dependencies"
         "do_create_admin_via_api:Creating admin user"
         "do_disable_default_admin:Disabling default admin"
         "do_verify_admin:Verifying admin"
