@@ -251,21 +251,27 @@ do_ensure_mongodb_users() {
         return 1
     fi
     
-    # Wait for MongoDB to fully initialize (not just be reachable)
-    # MongoDB with MONGO_INITDB_ROOT_USERNAME creates admin user automatically
+    # Wait for MongoDB to fully initialize
     log_info "Waiting for MongoDB initialization to complete..."
-    sleep 5
+    sleep 8
     
-    # Try to authenticate as admin with retries
-    # This handles the case where MongoDB is still initializing
+    # URL-encode the password for use in connection string
+    # This handles special characters properly
+    local encoded_admin_password
+    encoded_admin_password=$(printf '%s' "${mongo_admin_password}" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=''))")
+    
+    # Try to authenticate as admin using connection string (handles special chars better)
     local admin_auth_works=false
     local max_auth_attempts=10
     local auth_attempt=0
     
+    log_info "Testing MongoDB admin authentication..."
+    
     while [[ ${auth_attempt} -lt ${max_auth_attempts} ]]; do
         auth_attempt=$((auth_attempt + 1))
         
-        if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; then
+        # Use connection string format which handles special characters better
+        if docker compose ${COMPOSE_FILES} exec -T mongo mongosh "mongodb://admin:${encoded_admin_password}@localhost:27017/admin?authSource=admin" --eval "db.adminCommand('ping')" &>/dev/null; then
             admin_auth_works=true
             log_success "MongoDB admin authentication working"
             break
@@ -277,15 +283,35 @@ do_ensure_mongodb_users() {
         fi
     done
     
-    # If admin auth still doesn't work, check if MongoDB is running without auth
+    # If admin auth still doesn't work, we need to diagnose and fix
     if [[ "${admin_auth_works}" == "false" ]]; then
         log_warning "Admin authentication failed after ${max_auth_attempts} attempts"
         
-        # Check if we can connect without auth (fresh MongoDB without MONGO_INITDB_ROOT_* set)
-        if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+        # Check if this is auth-enabled MongoDB (started with MONGO_INITDB_ROOT_*)
+        # Try to run a command that requires auth - if it fails with auth error, auth is enabled
+        local auth_check_result
+        auth_check_result=$(docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.getSiblingDB('admin').getUsers()" 2>&1)
+        
+        if echo "${auth_check_result}" | grep -q "requires authentication"; then
+            # Auth is enabled but our password doesn't work
+            # This means there's existing data with a different admin password
+            log_error "MongoDB has authentication enabled but the password in .env doesn't match"
+            log_error ""
+            log_error "This typically happens when:"
+            log_error "  - MongoDB volume has data from a previous installation"
+            log_error "  - The admin password was set to a different value"
+            log_error ""
+            log_error "To fix, you need to reset MongoDB data (WARNING: deletes all existing data):"
+            log_error "  cd ${project_dir}"
+            log_error "  docker compose ${COMPOSE_FILES} down"
+            log_error "  docker volume rm bires_mongo_data"
+            log_error "  # Then re-run the installer"
+            return 1
+        else
+            # Auth is not enabled, we can create the admin user
             log_info "MongoDB running without authentication, setting up users..."
             
-            # Create admin user using environment variable to avoid shell escaping issues
+            # Create admin user using environment variable
             log_info "Creating MongoDB admin user..."
             docker compose ${COMPOSE_FILES} exec -T -e MONGO_ADMIN_PWD="${mongo_admin_password}" mongo mongosh --eval '
                 db = db.getSiblingDB("admin");
@@ -299,8 +325,7 @@ do_ensure_mongodb_users() {
                     print("Admin user created successfully");
                 } catch (e) {
                     if (e.code === 51003) {
-                        print("Admin user already exists, updating password...");
-                        db.changeUserPassword("admin", adminPwd);
+                        print("Admin user already exists");
                     } else {
                         throw e;
                     }
@@ -311,34 +336,21 @@ do_ensure_mongodb_users() {
             }
             
             admin_auth_works=true
-        else
-            # Both auth and no-auth failed - check if it's a password mismatch
-            log_error "Cannot connect to MongoDB"
-            log_error ""
-            log_error "Possible causes:"
-            log_error "  1. MongoDB password in .env doesn't match existing MongoDB data"
-            log_error "  2. MongoDB volume has data from a previous installation with different credentials"
-            log_error ""
-            log_error "To fix, try one of these options:"
-            log_error "  Option 1: Remove MongoDB volume and restart (WARNING: deletes all data):"
-            log_error "    docker compose ${COMPOSE_FILES} down"
-            log_error "    docker volume rm bires_mongo_data"
-            log_error "    Then re-run the installer"
-            log_error ""
-            log_error "  Option 2: Update .env with the correct MongoDB admin password"
-            return 1
         fi
     fi
     
     # Now create/update the application user using environment variables
     log_info "Ensuring application user '${mongo_user}' exists..."
     
+    # URL-encode the app password for use in connection string
+    local encoded_app_password
+    encoded_app_password=$(printf '%s' "${mongo_password}" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=''))")
+    
     # Use admin auth to create/update app user, passing credentials via env vars
     docker compose ${COMPOSE_FILES} exec -T \
-        -e MONGO_ADMIN_PWD="${mongo_admin_password}" \
         -e APP_USER="${mongo_user}" \
         -e APP_PWD="${mongo_password}" \
-        mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval '
+        mongo mongosh "mongodb://admin:${encoded_admin_password}@localhost:27017/admin?authSource=admin" --eval '
         db = db.getSiblingDB("admin");
         
         var appUser = process.env.APP_USER;
@@ -369,7 +381,7 @@ do_ensure_mongodb_users() {
     
     # Verify the application user can authenticate
     log_info "Verifying application user can authenticate..."
-    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u "${mongo_user}" -p "${mongo_password}" --authenticationDatabase admin --eval "db.getSiblingDB('bires').stats()" &>/dev/null; then
+    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh "mongodb://${mongo_user}:${encoded_app_password}@localhost:27017/bires?authSource=admin" --eval "db.stats()" &>/dev/null; then
         log_success "Application user '${mongo_user}' authentication verified"
     else
         log_error "Application user '${mongo_user}' cannot authenticate"
@@ -379,7 +391,7 @@ do_ensure_mongodb_users() {
     
     # Create database indexes
     log_info "Ensuring database indexes exist..."
-    docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u "${mongo_user}" -p "${mongo_password}" --authenticationDatabase admin --eval '
+    docker compose ${COMPOSE_FILES} exec -T mongo mongosh "mongodb://${mongo_user}:${encoded_app_password}@localhost:27017/bires?authSource=admin" --eval '
         db = db.getSiblingDB("bires");
         
         // User indexes
