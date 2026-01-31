@@ -213,9 +213,9 @@ export default function ExternalTaskBlock({
     const unsubStatus = socket.onStatusChange((state) => {
       setTaskState(state)
       
-      // Handle completion
+      // Handle completion (pass closeWindow flag from external task)
       if (state.status === 'completed') {
-        handleTaskCompleted(state.data)
+        handleTaskCompleted(state.data, state.closeWindow)
       }
     })
     
@@ -256,7 +256,7 @@ export default function ExternalTaskBlock({
   }, []) // Only run once on mount
 
   // Handle task completion
-  const handleTaskCompleted = useCallback((completionData: Record<string, unknown> | null) => {
+  const handleTaskCompleted = useCallback((completionData: Record<string, unknown> | null, closeWindow?: boolean) => {
     // Guard against double completion (can happen with WebSocket reconnects or React re-renders)
     if (completionHandledRef.current) {
       console.log('[ExternalTask] Completion already handled, skipping')
@@ -277,24 +277,26 @@ export default function ExternalTaskBlock({
       onFieldChange('_external_task_data', completionData)
     }
     
-    logEvent('external_task_complete', { data: completionData })
+    logEvent('external_task_complete', { data: completionData, closeWindow })
     
-    // Try to close external window
-    if (config.try_close_on_complete && externalWindowRef.current) {
+    // Close external window if:
+    // - closeWindow flag is true (sent by external task in complete message), OR
+    // - config.try_close_on_complete is enabled
+    const shouldCloseWindow = closeWindow || config.try_close_on_complete
+    
+    if (shouldCloseWindow && externalWindowRef.current) {
+      console.log('[ExternalTask] Closing external task window', { closeWindow, configClose: config.try_close_on_complete })
+      
       try {
-        // Send close command via WebSocket first
-        socketRef.current?.sendClose()
-        
-        // Then try to close window directly (may fail due to browser policy)
-        setTimeout(() => {
-          try {
-            externalWindowRef.current?.close()
-          } catch (e) {
-            console.log('[ExternalTask] Could not close window:', e)
-          }
-        }, 500) // Give external app time to handle close command
+        // Close window directly - this works because parent opened the window
+        externalWindowRef.current.close()
+        setIsWindowOpen(false)
+        logEvent('external_task_window_closed_on_complete', {})
       } catch (e) {
         console.log('[ExternalTask] Could not close window:', e)
+        
+        // Fallback: Send close command via WebSocket
+        socketRef.current?.sendClose()
       }
     }
     

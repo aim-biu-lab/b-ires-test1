@@ -432,6 +432,7 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
     elif msg_type == WSMessageType.COMPLETE.value:
         # Task completed
         data = payload.get("data", {})
+        close_window = payload.get("close_window", False)
         
         await update_task_in_redis(task_token, {
             "status": ExternalTaskStatus.COMPLETED.value,
@@ -440,11 +441,12 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             "completed_at": now.isoformat(),
         })
         
-        # Notify shell
+        # Notify shell (include close_window flag so parent can close popup)
         await manager.send_to_shell(task_token, {
             "type": WSMessageType.TASK_COMPLETED.value,
             "payload": {
                 "data": data,
+                "close_window": close_window,
             },
             "timestamp": now.isoformat(),
         })
@@ -457,10 +459,10 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             participant_number=task_data["participant_number"],
             stage_id=task_data["stage_id"],
             event_type=EventType.EXTERNAL_TASK_COMPLETE.value,
-            payload={"data": data},
+            payload={"data": data, "close_window": close_window},
         )
         
-        logger.info(f"External task {task_token} completed")
+        logger.info(f"External task {task_token} completed (close_window={close_window})")
     
     elif msg_type == WSMessageType.COMMAND_ACK.value:
         # Command acknowledgment

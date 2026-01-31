@@ -19,6 +19,7 @@ export interface ExternalTaskState {
   currentStep: string | null
   externalAppConnected: boolean
   data: Record<string, unknown> | null
+  closeWindow?: boolean  // Flag to tell parent to close popup window on completion
 }
 
 export type ExternalTaskCommand = 'restart' | 'close' | 'pause' | 'resume' | 'custom'
@@ -229,6 +230,7 @@ export class ExternalTaskSocket {
           status: 'completed',
           progress: 100,
           data: (payload?.data as Record<string, unknown>) || null,
+          closeWindow: (payload?.close_window as boolean) || false,
         })
         break
 
