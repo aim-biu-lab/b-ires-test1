@@ -362,6 +362,9 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
     payload = message.get("payload", {})
     now = datetime.utcnow()
     
+    # Debug logging - log ALL incoming messages from external app
+    logger.info(f"[DEBUG] External app message received: type={msg_type}, payload_keys={list(payload.keys()) if payload else []}, task={task_token[:8]}...")
+    
     # Refresh task data
     task_data = await get_task_by_token(task_token) or task_data
     
@@ -431,8 +434,10 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
     
     elif msg_type == WSMessageType.COMPLETE.value:
         # Task completed
+        logger.info(f"[DEBUG] Processing COMPLETE message for task {task_token[:8]}...")
         data = payload.get("data", {})
         close_window = payload.get("close_window", False)
+        logger.info(f"[DEBUG] COMPLETE payload: data_keys={list(data.keys()) if data else []}, close_window={close_window}")
         
         await update_task_in_redis(task_token, {
             "status": ExternalTaskStatus.COMPLETED.value,
@@ -495,7 +500,7 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
         # This handles cross-domain window closing when window.close() doesn't work
         # Flow: Parent sends close command -> Child receives, calls _closeWindow() ->
         #       Child sends close_window_request via WebSocket -> Parent closes popup
-        logger.info(f"External app requested window close for task {task_token}")
+        logger.info(f"[DEBUG] Processing CLOSE_WINDOW_REQUEST for task {task_token[:8]}...")
         
         # Forward to shell so it can close the popup window
         await manager.send_to_shell(task_token, {
@@ -513,6 +518,10 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             event_type="external_task_close_window_request",
             payload={},
         )
+    
+    else:
+        # Unrecognized message type
+        logger.warning(f"[DEBUG] Unrecognized message type from external app: '{msg_type}' for task {task_token[:8]}...")
 
 
 
