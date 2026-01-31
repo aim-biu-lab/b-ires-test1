@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Query
 from uuid import uuid4
+from urllib.parse import quote
 import secrets
 import logging
 import json
@@ -127,6 +128,13 @@ async def init_external_task(
     # Add platform_host for cross-domain WebSocket connection
     if platform_host:
         target_url_with_token += f"&platform_host={platform_host}"
+    
+    # Add participant_name from participant_label if present in session
+    participant_label = session_doc.get("participant_label")
+    if participant_label:
+        # URL encode the participant name (handles spaces, apostrophes, unicode, etc.)
+        encoded_name = quote(participant_label, safe='')
+        target_url_with_token += f"&participant_name={encoded_name}"
     
     # Create task data
     task_data = {
