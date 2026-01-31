@@ -1,12 +1,18 @@
 """
 WebSocket handler for External Task real-time communication
+
+NOTE: This module uses Redis pub/sub for cross-worker communication.
+When running with multiple workers (e.g., gunicorn --workers 4), 
+the shell and external_app might connect to different workers.
+Redis pub/sub ensures messages are forwarded between workers.
 """
 from datetime import datetime
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import logging
 import asyncio
+import uuid
 
 from app.core.database import get_collection
 from app.core.redis_client import get_redis
@@ -24,6 +30,9 @@ from app.api.external_tasks import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Redis channel for cross-worker WebSocket communication
+EXTERNAL_TASK_WS_CHANNEL = "external_task_ws_messages"
+
 
 class ConnectionManager:
     """
@@ -31,6 +40,9 @@ class ConnectionManager:
     Each task can have two connections:
     - shell: The experiment shell waiting for task completion
     - external_app: The external application performing the task
+    
+    Uses Redis pub/sub for cross-worker communication when running
+    with multiple gunicorn workers.
     """
     
     def __init__(self):
@@ -38,6 +50,131 @@ class ConnectionManager:
         self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
         # Lock for thread-safe operations
         self._lock = asyncio.Lock()
+        # Unique worker ID for this instance
+        self.worker_id = str(uuid.uuid4())[:8]
+        # Redis pubsub listener task
+        self._pubsub_task: Optional[asyncio.Task] = None
+        self._pubsub_started = False
+        
+        logger.info(f"[WS-MANAGER] ConnectionManager initialized, worker_id={self.worker_id}")
+    
+    async def start_pubsub_listener(self):
+        """Start listening for Redis pub/sub messages"""
+        if self._pubsub_started:
+            logger.debug(f"[WS-MANAGER] Pub/sub listener already started, worker_id={self.worker_id}")
+            return
+        self._pubsub_started = True
+        self._pubsub_task = asyncio.create_task(self._listen_for_messages())
+        logger.info(f"[WS-MANAGER] Started Redis pub/sub listener, worker_id={self.worker_id}")
+        # Give the listener a moment to subscribe
+        await asyncio.sleep(0.1)
+    
+    async def _listen_for_messages(self):
+        """Listen for messages from other workers via Redis pub/sub"""
+        try:
+            redis = get_redis()
+            if not redis:
+                logger.error(f"[WS-PUBSUB] Redis client not available, worker_id={self.worker_id}")
+                return
+                
+            pubsub = redis.pubsub()
+            await pubsub.subscribe(EXTERNAL_TASK_WS_CHANNEL)
+            logger.info(f"[WS-PUBSUB] *** SUBSCRIBED *** to channel {EXTERNAL_TASK_WS_CHANNEL}, worker_id={self.worker_id}")
+            
+            # Publish a test message to verify the channel is working
+            test_data = json.dumps({"worker_id": self.worker_id, "type": "subscription_test"})
+            num_subs = await redis.publish(EXTERNAL_TASK_WS_CHANNEL, test_data)
+            logger.info(f"[WS-PUBSUB] Test publish result: {num_subs} subscribers received it, worker_id={self.worker_id}")
+            
+            # Track last message time for heartbeat logging
+            message_count = 0
+            
+            async for raw_message in pubsub.listen():
+                message_count += 1
+                logger.debug(f"[WS-PUBSUB] Raw message #{message_count}, type={raw_message.get('type')}, worker_id={self.worker_id}")
+                if raw_message["type"] != "message":
+                    continue
+                
+                try:
+                    logger.debug(f"[WS-PUBSUB] Received raw message: {raw_message['data'][:100]}..., worker_id={self.worker_id}")
+                    data = json.loads(raw_message["data"])
+                    
+                    # Skip messages from this worker
+                    source_worker = data.get("worker_id")
+                    if source_worker == self.worker_id:
+                        logger.debug(f"[WS-PUBSUB] Skipping own message, worker_id={self.worker_id}")
+                        continue
+                    
+                    task_token = data.get("task_token")
+                    target = data.get("target")  # "shell" or "external_app"
+                    message = data.get("message")
+                    
+                    if not task_token or not target or not message:
+                        logger.warning(f"[WS-PUBSUB] Invalid message format: {data}")
+                        continue
+                    
+                    logger.info(f"[WS-PUBSUB] Processing cross-worker message: type={message.get('type')}, target={target}, task={task_token[:8]}, from_worker={source_worker}, my_worker={self.worker_id}")
+                    
+                    # Check if we have this connection locally
+                    async with self._lock:
+                        has_connection = task_token in self.active_connections and target in self.active_connections.get(task_token, {})
+                        logger.info(f"[WS-PUBSUB] Local connection check: task={task_token[:8]}, target={target}, has_connection={has_connection}, my_connections={list(self.active_connections.keys())}")
+                    
+                    # Try to deliver locally
+                    delivered = await self._deliver_local(task_token, target, message)
+                    logger.info(f"[WS-PUBSUB] Delivery result: delivered={delivered}, type={message.get('type')}, target={target}, task={task_token[:8]}...")
+                    
+                except Exception as e:
+                    logger.error(f"[WS-PUBSUB] Error processing message: {e}", exc_info=True)
+                    
+        except asyncio.CancelledError:
+            logger.info(f"[WS-MANAGER] Pub/sub listener cancelled, worker_id={self.worker_id}")
+        except Exception as e:
+            logger.error(f"[WS-PUBSUB] Listener error: {e}", exc_info=True)
+            # Restart listener after a delay
+            await asyncio.sleep(1)
+            self._pubsub_started = False
+            await self.start_pubsub_listener()
+    
+    async def _deliver_local(self, task_token: str, target: str, message: dict) -> bool:
+        """Try to deliver a message to a local connection"""
+        ws = None
+        async with self._lock:
+            if task_token not in self.active_connections:
+                logger.debug(f"[WS-LOCAL] Task {task_token[:8]} not in active_connections")
+                return False
+            
+            ws = self.active_connections[task_token].get(target)
+            if not ws:
+                logger.debug(f"[WS-LOCAL] Target {target} not found for task {task_token[:8]}")
+                return False
+        
+        # Send outside the lock to avoid blocking
+        try:
+            await ws.send_json(message)
+            logger.debug(f"[WS-LOCAL] Delivered to {target} for task {task_token[:8]}: type={message.get('type')}")
+            return True
+        except Exception as e:
+            logger.error(f"[WS-LOCAL] Failed to deliver to {target}: {e}")
+            return False
+    
+    async def _publish_to_redis(self, task_token: str, target: str, message: dict):
+        """Publish a message to Redis for other workers"""
+        try:
+            redis = get_redis()
+            if not redis:
+                logger.error(f"[WS-PUBSUB] Redis client not available for publishing")
+                return
+            data = json.dumps({
+                "worker_id": self.worker_id,
+                "task_token": task_token,
+                "target": target,
+                "message": message,
+            })
+            num_subscribers = await redis.publish(EXTERNAL_TASK_WS_CHANNEL, data)
+            logger.info(f"[WS-PUBSUB] Published message: type={message.get('type')}, target={target}, task={task_token[:8]}, subscribers={num_subscribers}, worker_id={self.worker_id}")
+        except Exception as e:
+            logger.error(f"[WS-PUBSUB] Failed to publish: {e}", exc_info=True)
     
     async def connect(self, task_token: str, websocket: WebSocket, client_type: str):
         """Register a new connection"""
@@ -57,7 +194,10 @@ class ConnectionManager:
             
             self.active_connections[task_token][client_type] = websocket
         
-        logger.info(f"WebSocket connected: {client_type} for task {task_token}")
+        # Ensure pub/sub listener is running
+        await self.start_pubsub_listener()
+        
+        logger.info(f"[WS-CONNECT] {client_type} connected for task {task_token[:8]}..., worker_id={self.worker_id}")
     
     async def disconnect(self, task_token: str, client_type: str):
         """Remove a connection"""
@@ -70,43 +210,48 @@ class ConnectionManager:
                 if not self.active_connections[task_token]:
                     del self.active_connections[task_token]
         
-        logger.info(f"WebSocket disconnected: {client_type} for task {task_token}")
+        logger.info(f"[WS-DISCONNECT] {client_type} disconnected for task {task_token[:8]}..., worker_id={self.worker_id}")
     
     async def send_to_shell(self, task_token: str, message: dict):
-        """Send message to the shell client"""
-        async with self._lock:
-            if task_token in self.active_connections:
-                shell_ws = self.active_connections[task_token].get("shell")
-                if shell_ws:
-                    try:
-                        await shell_ws.send_json(message)
-                        return True
-                    except Exception as e:
-                        logger.error(f"Failed to send to shell: {e}")
-        return False
+        """Send message to the shell client (tries local first, then pub/sub)"""
+        # Try local delivery first
+        local_success = await self._deliver_local(task_token, "shell", message)
+        
+        if local_success:
+            logger.info(f"[WS-DEBUG] send_to_shell SUCCESS (local): type={message.get('type')} for task {task_token[:8]}...")
+            return True
+        
+        # Not found locally, publish to Redis for other workers
+        logger.info(f"[WS-DEBUG] send_to_shell: shell not local, publishing to Redis for task {task_token[:8]}...")
+        await self._publish_to_redis(task_token, "shell", message)
+        
+        # We don't know if another worker delivered it, but we've done our best
+        # Return True to indicate the message was published
+        return True
     
     async def send_to_external_app(self, task_token: str, message: dict):
-        """Send message to the external app client"""
-        async with self._lock:
-            if task_token in self.active_connections:
-                ext_ws = self.active_connections[task_token].get("external_app")
-                if ext_ws:
-                    try:
-                        await ext_ws.send_json(message)
-                        return True
-                    except Exception as e:
-                        logger.error(f"Failed to send to external app: {e}")
-        return False
+        """Send message to the external app client (tries local first, then pub/sub)"""
+        # Try local delivery first
+        local_success = await self._deliver_local(task_token, "external_app", message)
+        
+        if local_success:
+            logger.debug(f"[WS-DEBUG] send_to_external_app SUCCESS (local): type={message.get('type')} for task {task_token[:8]}...")
+            return True
+        
+        # Not found locally, publish to Redis for other workers
+        logger.info(f"[WS-DEBUG] send_to_external_app: external_app not local, publishing to Redis for task {task_token[:8]}...")
+        await self._publish_to_redis(task_token, "external_app", message)
+        return True
     
     def is_shell_connected(self, task_token: str) -> bool:
-        """Check if shell is connected"""
+        """Check if shell is connected (local only - can't check other workers)"""
         return (
             task_token in self.active_connections and
             "shell" in self.active_connections[task_token]
         )
     
     def is_external_app_connected(self, task_token: str) -> bool:
-        """Check if external app is connected"""
+        """Check if external app is connected (local only - can't check other workers)"""
         return (
             task_token in self.active_connections and
             "external_app" in self.active_connections[task_token]
@@ -155,48 +300,66 @@ async def external_task_websocket(websocket: WebSocket, task_token: str):
     Both shell and external app connect to the same endpoint.
     The client type is determined by the first message sent.
     """
+    logger.info(f"[WS-DEBUG] New WebSocket connection attempt for task {task_token[:8]}...")
+    
     # Validate task token
     task_data = await get_task_by_token(task_token)
     if not task_data:
+        logger.warning(f"[WS-DEBUG] Task not found or expired: {task_token[:8]}...")
         await websocket.close(code=4004, reason="Task not found or expired")
         return
     
+    logger.info(f"[WS-DEBUG] Task found, status={task_data.get('status')}, accepting connection...")
+    
     # Accept connection (we'll determine client type from first message)
     await websocket.accept()
+    logger.info(f"[WS-DEBUG] Connection accepted for task {task_token[:8]}...")
     
     client_type = None
     
     try:
         # Wait for client identification message
-        first_message = await asyncio.wait_for(
-            websocket.receive_json(),
-            timeout=10.0  # 10 second timeout for identification
-        )
+        logger.info(f"[WS-DEBUG] Waiting for identification message from task {task_token[:8]}...")
+        try:
+            first_message = await asyncio.wait_for(
+                websocket.receive_json(),
+                timeout=10.0  # 10 second timeout for identification
+            )
+        except json.JSONDecodeError as e:
+            logger.error(f"[WS-DEBUG] Invalid JSON in first message for task {task_token[:8]}: {e}")
+            await websocket.close(code=4003, reason="Invalid JSON message")
+            return
         
         # Determine client type from message
         msg_type = first_message.get("type", "")
+        logger.info(f"[WS-DEBUG] Received identification: type='{msg_type}', full_message={first_message} for task {task_token[:8]}...")
         
         if msg_type == "shell_connect":
             client_type = "shell"
+            logger.info(f"[WS-DEBUG] Identified as SHELL for task {task_token[:8]}...")
             await handle_shell_connection(websocket, task_token, task_data, first_message)
         elif msg_type == "ready" or msg_type == "external_app_connect":
             client_type = "external_app"
+            logger.info(f"[WS-DEBUG] Identified as EXTERNAL_APP for task {task_token[:8]}...")
             await handle_external_app_connection(websocket, task_token, task_data, first_message)
         else:
-            await websocket.close(code=4000, reason="Invalid client identification")
+            logger.warning(f"[WS-DEBUG] Invalid identification type: '{msg_type}' for task {task_token[:8]}...")
+            await websocket.close(code=4000, reason=f"Invalid client identification: {msg_type}")
             return
             
     except asyncio.TimeoutError:
+        logger.warning(f"[WS-DEBUG] Timeout waiting for identification for task {task_token[:8]}...")
         await websocket.close(code=4001, reason="Connection timeout - no identification message")
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected during handshake for task {task_token}")
+        logger.info(f"[WS-DEBUG] WebSocket disconnected during handshake for task {task_token[:8]}...")
     except Exception as e:
-        logger.error(f"WebSocket error for task {task_token}: {e}")
+        logger.error(f"[WS-DEBUG] WebSocket error for task {task_token[:8]}: {e}", exc_info=True)
         try:
             await websocket.close(code=4002, reason=str(e))
         except Exception:
             pass
     finally:
+        logger.info(f"[WS-DEBUG] Connection cleanup: client_type={client_type} for task {task_token[:8]}...")
         if client_type:
             await manager.disconnect(task_token, client_type)
             
@@ -215,12 +378,20 @@ async def external_task_websocket(websocket: WebSocket, task_token: str):
 async def handle_shell_connection(websocket: WebSocket, task_token: str, 
                                    task_data: dict, first_message: dict):
     """Handle WebSocket connection from the experiment shell"""
+    logger.info(f"[WS-DEBUG] handle_shell_connection started for task {task_token[:8]}...")
+    
     # Register connection
     # Note: websocket already accepted, need to re-register properly
     async with manager._lock:
         if task_token not in manager.active_connections:
             manager.active_connections[task_token] = {}
         manager.active_connections[task_token]["shell"] = websocket
+        # Log current connections for this task
+        connections = list(manager.active_connections[task_token].keys())
+        logger.info(f"[WS-DEBUG] Registered shell, current connections: {connections} for task {task_token[:8]}, worker_id={manager.worker_id}")
+    
+    # Start pub/sub listener for cross-worker communication
+    await manager.start_pubsub_listener()
     
     # Update task data
     await update_task_in_redis(task_token, {"shell_connected": True})
@@ -301,11 +472,19 @@ async def handle_shell_message(websocket: WebSocket, task_token: str,
 async def handle_external_app_connection(websocket: WebSocket, task_token: str,
                                           task_data: dict, first_message: dict):
     """Handle WebSocket connection from the external application"""
+    logger.info(f"[WS-DEBUG] handle_external_app_connection started for task {task_token[:8]}...")
+    
     # Register connection
     async with manager._lock:
         if task_token not in manager.active_connections:
             manager.active_connections[task_token] = {}
         manager.active_connections[task_token]["external_app"] = websocket
+        # Log current connections for this task
+        connections = list(manager.active_connections[task_token].keys())
+        logger.info(f"[WS-DEBUG] Registered external_app, current connections: {connections} for task {task_token[:8]}, worker_id={manager.worker_id}")
+    
+    # Start pub/sub listener for cross-worker communication
+    await manager.start_pubsub_listener()
     
     now = datetime.utcnow()
     
@@ -315,6 +494,7 @@ async def handle_external_app_connection(websocket: WebSocket, task_token: str,
         "status": ExternalTaskStatus.STARTED.value,
         "started_at": now.isoformat(),
     })
+    logger.info(f"[WS-DEBUG] Updated Redis: external_app_connected=True for task {task_token[:8]}...")
     
     logger.info(f"External app connected for task {task_token}")
     
@@ -329,12 +509,14 @@ async def handle_external_app_connection(websocket: WebSocket, task_token: str,
         },
         "timestamp": now.isoformat(),
     })
+    logger.info(f"[WS-DEBUG] Sent INIT to external app for task {task_token[:8]}...")
     
     # Notify shell that external app connected
-    await manager.send_to_shell(task_token, {
+    shell_notified = await manager.send_to_shell(task_token, {
         "type": WSMessageType.EXTERNAL_APP_CONNECTED.value,
         "timestamp": now.isoformat(),
     })
+    logger.info(f"[WS-DEBUG] Notified shell of external_app_connected: success={shell_notified} for task {task_token[:8]}...")
     
     # Log event
     await log_event(
