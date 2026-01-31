@@ -190,34 +190,83 @@ do_start_infrastructure() {
     project_dir=$(get_config "project_dir" "")
     cd "${project_dir}" || return 1
     
-    # Start infrastructure services first
-    docker compose ${COMPOSE_FILES} up -d mongo redis minio minio-init
+    # Load .env file to get credentials
+    if [[ -f ".env" ]]; then
+        source .env
+    fi
+    
+    # Stop and remove old containers to ensure they pick up new .env values
+    log_info "Removing old containers if they exist..."
+    docker compose ${COMPOSE_FILES} down 2>/dev/null || true
+    
+    # Start infrastructure services first with --force-recreate
+    docker compose ${COMPOSE_FILES} up -d --force-recreate mongo redis minio minio-init
     
     log_info "Waiting for infrastructure to be ready..."
+    
+    # Determine if we're in production mode (requires authentication)
+    local compose_mode
+    compose_mode=$(get_config "compose_mode" "production")
     
     # Wait for MongoDB
     local max_wait=60
     local count=0
-    while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
-        sleep 2
-        count=$((count + 1))
-        if [[ $count -ge $max_wait ]]; then
-            log_error "MongoDB failed to start within ${max_wait} seconds"
+    if [[ "${compose_mode}" == "production" ]]; then
+        # Production mode - use authentication
+        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+        if [[ -z "${mongo_admin_password}" ]]; then
+            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
             return 1
         fi
-    done
+        while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
+            sleep 2
+            count=$((count + 1))
+            if [[ $count -ge $max_wait ]]; then
+                log_error "MongoDB failed to start within ${max_wait} seconds"
+                return 1
+            fi
+        done
+    else
+        # Test mode - no authentication
+        while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+            sleep 2
+            count=$((count + 1))
+            if [[ $count -ge $max_wait ]]; then
+                log_error "MongoDB failed to start within ${max_wait} seconds"
+                return 1
+            fi
+        done
+    fi
     log_success "MongoDB is ready"
     
     # Wait for Redis
     count=0
-    while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; do
-        sleep 2
-        count=$((count + 1))
-        if [[ $count -ge 30 ]]; then
-            log_error "Redis failed to start"
+    if [[ "${compose_mode}" == "production" ]]; then
+        # Production mode - use password
+        local redis_password="${REDIS_PASSWORD:-}"
+        if [[ -z "${redis_password}" ]]; then
+            log_error "REDIS_PASSWORD not found in .env file"
             return 1
         fi
-    done
+        while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli -a "${redis_password}" ping &>/dev/null; do
+            sleep 2
+            count=$((count + 1))
+            if [[ $count -ge 30 ]]; then
+                log_error "Redis failed to start"
+                return 1
+            fi
+        done
+    else
+        # Test mode - no password
+        while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; do
+            sleep 2
+            count=$((count + 1))
+            if [[ $count -ge 30 ]]; then
+                log_error "Redis failed to start"
+                return 1
+            fi
+        done
+    fi
     log_success "Redis is ready"
     
     # Wait for MinIO
@@ -242,8 +291,22 @@ do_start_application() {
     project_dir=$(get_config "project_dir" "")
     cd "${project_dir}" || return 1
     
-    # Start application services
-    docker compose ${COMPOSE_FILES} up -d backend experiment-shell admin-dashboard
+    # Verify .env file exists and is readable
+    if [[ ! -f ".env" ]]; then
+        log_error ".env file not found in ${project_dir}"
+        return 1
+    fi
+    
+    # Check if MONGO_URL is set in .env
+    if ! grep -q "^MONGO_URL=" .env; then
+        log_error "MONGO_URL not found in .env file"
+        return 1
+    fi
+    
+    log_info "Verified .env file contains required variables"
+    
+    # Start application services with --force-recreate to ensure .env is loaded
+    docker compose ${COMPOSE_FILES} up -d --force-recreate backend experiment-shell admin-dashboard
     
     # Wait for backend
     log_info "Waiting for backend to be ready..."
@@ -275,11 +338,22 @@ do_start_application() {
             log_error "Showing backend container status:"
             docker compose ${COMPOSE_FILES} ps backend
             echo ""
+            log_error "Checking backend environment variables:"
+            echo "================================================================"
+            docker compose ${COMPOSE_FILES} exec -T backend env | grep -E "MONGO|REDIS" | sed 's/\(PASSWORD\|SECRET\)=.*/\1=***REDACTED***/g'
+            echo "================================================================"
+            echo ""
+            log_error "Checking .env file (first few lines):"
+            echo "================================================================"
+            head -n 30 .env | grep -E "MONGO|REDIS" | sed 's/\(PASSWORD\|SECRET\)=.*/\1=***REDACTED***/g'
+            echo "================================================================"
+            echo ""
             log_error "Troubleshooting tips:"
             log_error "  1. Check if MongoDB is accessible: docker compose ${COMPOSE_FILES} exec backend ping mongo -c 3"
             log_error "  2. Check if Redis is accessible: docker compose ${COMPOSE_FILES} exec backend ping redis -c 3"
             log_error "  3. Verify .env file has correct credentials"
             log_error "  4. Try manual backend startup: docker compose ${COMPOSE_FILES} up backend"
+            log_error "  5. Restart all services: docker compose ${COMPOSE_FILES} down && docker compose ${COMPOSE_FILES} up -d"
             return 1
         fi
     done

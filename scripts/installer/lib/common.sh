@@ -687,6 +687,11 @@ wait_for_mongodb() {
     
     cd "${project_dir}" || return 1
     
+    # Load .env file to get credentials
+    if [[ -f ".env" ]]; then
+        source .env
+    fi
+    
     # Ensure MongoDB is running
     if ! ensure_docker_service "mongo" "${project_dir}"; then
         log_error "Failed to ensure MongoDB service is running"
@@ -708,15 +713,34 @@ wait_for_mongodb() {
     local wait_interval=2
     local max_attempts=$((max_wait / wait_interval))
     
-    while ! docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
-        sleep ${wait_interval}
-        count=$((count + 1))
-        
-        if [[ $count -ge $max_attempts ]]; then
-            log_error "MongoDB not responding after ${max_wait} seconds"
+    if [[ "${compose_mode}" == "production" ]]; then
+        # Production mode - use authentication
+        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+        if [[ -z "${mongo_admin_password}" ]]; then
+            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
             return 1
         fi
-    done
+        while ! docker compose ${compose_files} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
+            sleep ${wait_interval}
+            count=$((count + 1))
+            
+            if [[ $count -ge $max_attempts ]]; then
+                log_error "MongoDB not responding after ${max_wait} seconds"
+                return 1
+            fi
+        done
+    else
+        # Test mode - no authentication
+        while ! docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+            sleep ${wait_interval}
+            count=$((count + 1))
+            
+            if [[ $count -ge $max_attempts ]]; then
+                log_error "MongoDB not responding after ${max_wait} seconds"
+                return 1
+            fi
+        done
+    fi
     
     log_success "MongoDB is ready and healthy"
     return 0

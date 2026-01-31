@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Test overrides - HTTP only, no SSL
 services:
   backend:

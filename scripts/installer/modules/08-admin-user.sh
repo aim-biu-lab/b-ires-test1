@@ -105,6 +105,11 @@ do_create_admin_via_api() {
     
     log_info "Creating admin user via MongoDB..."
     
+    # Load .env file to get credentials
+    if [[ -f ".env" ]]; then
+        source .env
+    fi
+    
     # Generate bcrypt hash for password using Python in the container
     local password_hash
     password_hash=$(docker compose ${compose_files} exec -T backend python3 -c "
@@ -140,7 +145,18 @@ except ImportError:
     local timestamp
     timestamp=$(date -Iseconds)
     
-    docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
+    # Build mongosh command based on mode
+    local mongosh_cmd="mongosh"
+    if [[ "${compose_mode}" == "production" ]]; then
+        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+        if [[ -z "${mongo_admin_password}" ]]; then
+            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
+            return 1
+        fi
+        mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
+    fi
+    
+    docker compose ${compose_files} exec -T mongo ${mongosh_cmd} bires --quiet --eval "
         // Check if user exists by email or username
         var existingUserByEmail = db.users.findOne({email: '${admin_email}'});
         var existingUserByUsername = db.users.findOne({username: '${admin_username}'});
@@ -195,6 +211,11 @@ do_disable_default_admin() {
     
     cd "${project_dir}" || return 1
     
+    # Load .env file to get credentials
+    if [[ -f ".env" ]]; then
+        source .env
+    fi
+    
     # Get compose files
     local compose_mode
     compose_mode=$(get_config "compose_mode" "production")
@@ -205,11 +226,20 @@ do_disable_default_admin() {
         compose_files="-f docker-compose.yml -f docker-compose.test.yml"
     fi
     
+    # Build mongosh command based on mode
+    local mongosh_cmd="mongosh"
+    if [[ "${compose_mode}" == "production" ]]; then
+        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+        if [[ -n "${mongo_admin_password}" ]]; then
+            mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
+        fi
+    fi
+    
     # Only disable default admin if a different admin email is configured
     if [[ "${admin_email}" != "admin@example.com" ]]; then
         log_info "Disabling default admin account..."
         
-        docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
+        docker compose ${compose_files} exec -T mongo ${mongosh_cmd} bires --quiet --eval "
             db.users.updateOne(
                 {email: 'admin@example.com'},
                 {\$set: {is_active: false, updated_at: new Date()}}
@@ -246,6 +276,11 @@ do_verify_admin() {
         project_dir=$(get_config "project_dir" "")
         cd "${project_dir}" || return 1
         
+        # Load .env file to get credentials
+        if [[ -f ".env" ]]; then
+            source .env
+        fi
+        
         # Get compose files
         local compose_mode
         compose_mode=$(get_config "compose_mode" "production")
@@ -256,8 +291,17 @@ do_verify_admin() {
             compose_files="-f docker-compose.yml -f docker-compose.test.yml"
         fi
         
+        # Build mongosh command based on mode
+        local mongosh_cmd="mongosh"
+        if [[ "${compose_mode}" == "production" ]]; then
+            local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+            if [[ -n "${mongo_admin_password}" ]]; then
+                mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
+            fi
+        fi
+        
         local user_check
-        user_check=$(docker compose ${compose_files} exec -T mongo mongosh bires --quiet --eval "
+        user_check=$(docker compose ${compose_files} exec -T mongo ${mongosh_cmd} bires --quiet --eval "
             var user = db.users.findOne({email: '${admin_email}'});
             if (user) {
                 print('User found: ' + user.email + ', active: ' + user.is_active + ', role: ' + user.role);
