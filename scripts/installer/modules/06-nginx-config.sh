@@ -26,6 +26,29 @@ should_run() {
     local ssl_enabled
     ssl_enabled=$(get_config "ssl_enabled" "true")
     
+    # Auto-detect project directory if not configured
+    if [[ -z "${project_dir}" ]]; then
+        local username
+        username=$(get_config "create_user" "bires")
+        local possible_dirs=(
+            "/home/${username}/bires"
+            "/home/bires/bires"
+            "/opt/bires"
+        )
+        
+        for dir in "${possible_dirs[@]}"; do
+            if [[ -d "${dir}" && -f "${dir}/docker-compose.prod.yml" ]]; then
+                project_dir="${dir}"
+                break
+            fi
+        done
+    fi
+    
+    # If still no project_dir, allow run_module to handle the error with proper messaging
+    if [[ -z "${project_dir}" ]]; then
+        return 0
+    fi
+    
     local config_file
     if [[ "${ssl_enabled}" == "true" ]]; then
         config_file="${project_dir}/nginx/nginx.prod.conf"
@@ -431,15 +454,39 @@ run_module() {
     
     mark_step_started "${MODULE_NAME}"
     
-    # Verify prerequisites
+    # Verify prerequisites with auto-detection fallback
     local domain
     domain=$(get_config "domain" "")
     local project_dir
     project_dir=$(get_config "project_dir" "")
     
+    # Auto-detect project directory if not configured but exists
     if [[ -z "${project_dir}" ]]; then
-        log_error "Project directory not configured"
-        log_error "Module 03 (Clone Project) must be completed first"
+        log_warning "Project directory not configured in state, attempting auto-detection..."
+        
+        # Common locations to check
+        local username
+        username=$(get_config "create_user" "bires")
+        local possible_dirs=(
+            "/home/${username}/bires"
+            "/home/bires/bires"
+            "/opt/bires"
+        )
+        
+        for dir in "${possible_dirs[@]}"; do
+            if [[ -d "${dir}" && -f "${dir}/docker-compose.prod.yml" ]]; then
+                project_dir="${dir}"
+                log_info "Auto-detected project directory: ${project_dir}"
+                # Save to state for future use
+                save_config "project_dir" "${project_dir}"
+                break
+            fi
+        done
+    fi
+    
+    if [[ -z "${project_dir}" ]]; then
+        log_error "Project directory not configured and could not be auto-detected"
+        log_error "Module 03 (Clone Project) must be completed first, or set project_dir manually"
         mark_step_failed "${MODULE_NAME}"
         return 1
     fi
@@ -450,9 +497,22 @@ run_module() {
         return 1
     fi
     
+    # Auto-detect domain from .env file if not configured
     if [[ -z "${domain}" ]]; then
-        log_error "Domain not configured"
-        log_error "Module 04 (Environment Configuration) must be completed first"
+        log_warning "Domain not configured in state, attempting auto-detection..."
+        
+        if [[ -f "${project_dir}/.env" ]]; then
+            domain=$(grep -E "^DOMAIN=" "${project_dir}/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'" || true)
+            if [[ -n "${domain}" ]]; then
+                log_info "Auto-detected domain from .env: ${domain}"
+                save_config "domain" "${domain}"
+            fi
+        fi
+    fi
+    
+    if [[ -z "${domain}" ]]; then
+        log_error "Domain not configured and could not be auto-detected"
+        log_error "Module 04 (Environment Configuration) must be completed first, or set domain manually"
         mark_step_failed "${MODULE_NAME}"
         return 1
     fi
