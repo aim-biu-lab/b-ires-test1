@@ -650,7 +650,7 @@ wait_for_backend() {
     local wait_interval=3
     local max_attempts=$((max_wait / wait_interval))
     
-    while ! curl -s http://localhost:8000/health &>/dev/null; do
+    while ! curl -s http://localhost:8000/api/health &>/dev/null; do
         sleep ${wait_interval}
         count=$((count + 1))
         

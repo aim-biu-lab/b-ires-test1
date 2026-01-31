@@ -99,7 +99,7 @@ docker compose ${COMPOSE_FILES} up -d backend experiment-shell admin-dashboard
 # Wait for backend to be ready
 log_info "Waiting for backend..."
 for i in {1..60}; do
-    if curl -s http://localhost:8000/health &>/dev/null; then
+    if curl -s http://localhost:8000/api/health &>/dev/null; then
         log_success "Backend is ready"
         break
     fi

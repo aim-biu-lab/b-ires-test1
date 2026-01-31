@@ -249,7 +249,7 @@ do_start_application() {
     log_info "Waiting for backend to be ready..."
     local max_wait=120
     local count=0
-    while ! curl -s http://localhost:8000/health &>/dev/null; do
+    while ! curl -s http://localhost:8000/api/health &>/dev/null; do
         sleep 3
         count=$((count + 1))
         if [[ $count -ge $max_wait ]]; then
