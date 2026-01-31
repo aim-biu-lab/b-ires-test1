@@ -631,6 +631,26 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             "close_window": close_window,  # Persist close_window flag
         })
         
+        # IMPORTANT: Persist completion state to MongoDB session data immediately
+        # This ensures the completion survives page refreshes before the user clicks "Continue"
+        # (similar to how video completion should persist)
+        sessions = get_collection("sessions")
+        stage_id = task_data["stage_id"]
+        session_id = task_data["session_id"]
+        
+        await sessions.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    f"data.{stage_id}._external_task_completed": True,
+                    f"data.{stage_id}._external_task_completion_time": now.isoformat(),
+                    f"data.{stage_id}._external_task_data": data,
+                    "updated_at": now,
+                }
+            }
+        )
+        logger.info(f"[DEBUG] Persisted completion to MongoDB session {session_id}, stage {stage_id}")
+        
         # Notify shell (include close_window flag so parent can close popup)
         shell_notified = await manager.send_to_shell(task_token, {
             "type": WSMessageType.TASK_COMPLETED.value,

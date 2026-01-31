@@ -107,6 +107,17 @@ async def log_events_batch(
             detail="Session not found"
         )
     
+    # Validate session has required fields
+    experiment_id = session_doc.get("experiment_id")
+    user_id = session_doc.get("user_id")
+    
+    if not experiment_id or not user_id:
+        logger.error(f"Session {batch.session_id} missing required fields: experiment_id={experiment_id}, user_id={user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Session document is missing required fields"
+        )
+    
     accepted = 0
     duplicates = 0
     failed = 0
@@ -129,8 +140,8 @@ async def log_events_batch(
                 "event_id": event_id,
                 "idempotency_key": event.idempotency_key,
                 "session_id": batch.session_id,
-                "experiment_id": session_doc["experiment_id"],
-                "user_id": session_doc["user_id"],
+                "experiment_id": experiment_id,
+                "user_id": user_id,
                 "participant_number": session_doc.get("participant_number", 0),
                 "participant_label": session_doc.get("participant_label"),
                 "event_type": event.event_type.value,
@@ -150,28 +161,33 @@ async def log_events_batch(
             accepted += 1
             
         except Exception as e:
-            logger.error(f"Failed to process event: {e}")
+            logger.error(f"Failed to process event: {e}", exc_info=True)
             failed += 1
     
     # Bulk insert
     if events_to_insert:
-        await events_collection.insert_many(events_to_insert)
-        logger.info(f"Inserted {len(events_to_insert)} events for session {batch.session_id}")
-        
-        # Queue async backup
-        background_tasks.add_task(
-            LogExporter.export_events_batch_to_s3,
-            events_to_insert
-        )
+        try:
+            await events_collection.insert_many(events_to_insert)
+            logger.info(f"Inserted {len(events_to_insert)} events for session {batch.session_id}")
+            
+            # Queue async backup
+            background_tasks.add_task(
+                LogExporter.export_events_batch_to_s3,
+                events_to_insert
+            )
+        except Exception as e:
+            logger.error(f"Failed to insert events batch: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to store events: {str(e)}"
+            )
     
     # Return authoritative session state for reconciliation
-    session_state = None
-    if session_doc:
-        session_state = {
-            "current_stage_id": session_doc["current_stage_id"],
-            "completed_stages": session_doc["completed_stages"],
-            "status": session_doc["status"],
-        }
+    session_state = {
+        "current_stage_id": session_doc.get("current_stage_id", ""),
+        "completed_stages": session_doc.get("completed_stages", []),
+        "status": session_doc.get("status", "active"),
+    }
     
     logger.info(f"Batch result: accepted={accepted}, duplicates={duplicates}, failed={failed}")
     
