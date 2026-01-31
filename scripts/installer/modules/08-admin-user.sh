@@ -105,11 +105,6 @@ do_create_admin_via_api() {
     
     log_info "Creating admin user via MongoDB..."
     
-    # Load .env file to get credentials
-    if [[ -f ".env" ]]; then
-        source .env
-    fi
-    
     # Generate bcrypt hash for password using Python in the container
     local password_hash
     password_hash=$(docker compose ${compose_files} exec -T backend python3 -c "
@@ -148,12 +143,18 @@ except ImportError:
     # Build mongosh command based on mode
     local mongosh_cmd="mongosh"
     if [[ "${compose_mode}" == "production" ]]; then
-        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
-        if [[ -z "${mongo_admin_password}" ]]; then
-            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
-            return 1
+        # Try to get password from .env file
+        local mongo_admin_password=""
+        if [[ -f ".env" ]]; then
+            mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
         fi
-        mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
+        
+        if [[ -n "${mongo_admin_password}" ]]; then
+            mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
+        else
+            log_warning "MONGO_ADMIN_PASSWORD not found in .env, using connection without auth"
+            # Will try without auth - might work if MongoDB doesn't have auth enabled yet
+        fi
     fi
     
     docker compose ${compose_files} exec -T mongo ${mongosh_cmd} bires --quiet --eval "
@@ -211,11 +212,6 @@ do_disable_default_admin() {
     
     cd "${project_dir}" || return 1
     
-    # Load .env file to get credentials
-    if [[ -f ".env" ]]; then
-        source .env
-    fi
-    
     # Get compose files
     local compose_mode
     compose_mode=$(get_config "compose_mode" "production")
@@ -229,7 +225,12 @@ do_disable_default_admin() {
     # Build mongosh command based on mode
     local mongosh_cmd="mongosh"
     if [[ "${compose_mode}" == "production" ]]; then
-        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+        # Try to get password from .env file
+        local mongo_admin_password=""
+        if [[ -f ".env" ]]; then
+            mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
+        fi
+        
         if [[ -n "${mongo_admin_password}" ]]; then
             mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
         fi
@@ -276,11 +277,6 @@ do_verify_admin() {
         project_dir=$(get_config "project_dir" "")
         cd "${project_dir}" || return 1
         
-        # Load .env file to get credentials
-        if [[ -f ".env" ]]; then
-            source .env
-        fi
-        
         # Get compose files
         local compose_mode
         compose_mode=$(get_config "compose_mode" "production")
@@ -294,7 +290,12 @@ do_verify_admin() {
         # Build mongosh command based on mode
         local mongosh_cmd="mongosh"
         if [[ "${compose_mode}" == "production" ]]; then
-            local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
+            # Try to get password from .env file
+            local mongo_admin_password=""
+            if [[ -f ".env" ]]; then
+                mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
+            fi
+            
             if [[ -n "${mongo_admin_password}" ]]; then
                 mongosh_cmd="mongosh -u admin -p ${mongo_admin_password} --authenticationDatabase admin"
             fi

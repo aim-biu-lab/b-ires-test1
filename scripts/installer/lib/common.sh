@@ -687,11 +687,6 @@ wait_for_mongodb() {
     
     cd "${project_dir}" || return 1
     
-    # Load .env file to get credentials
-    if [[ -f ".env" ]]; then
-        source .env
-    fi
-    
     # Ensure MongoDB is running
     if ! ensure_docker_service "mongo" "${project_dir}"; then
         log_error "Failed to ensure MongoDB service is running"
@@ -714,21 +709,44 @@ wait_for_mongodb() {
     local max_attempts=$((max_wait / wait_interval))
     
     if [[ "${compose_mode}" == "production" ]]; then
-        # Production mode - use authentication
-        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
-        if [[ -z "${mongo_admin_password}" ]]; then
-            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
-            return 1
+        # Production mode - try to get password
+        local mongo_admin_password=""
+        if [[ -f ".env" ]]; then
+            mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
         fi
-        while ! docker compose ${compose_files} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
-            sleep ${wait_interval}
-            count=$((count + 1))
-            
-            if [[ $count -ge $max_attempts ]]; then
-                log_error "MongoDB not responding after ${max_wait} seconds"
-                return 1
-            fi
-        done
+        
+        if [[ -z "${mongo_admin_password}" ]]; then
+            log_warning "MONGO_ADMIN_PASSWORD not found in .env, trying without authentication..."
+            # Try without authentication (might be first-time setup)
+            while ! docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+                sleep ${wait_interval}
+                count=$((count + 1))
+                
+                if [[ $count -ge $max_attempts ]]; then
+                    log_error "MongoDB not responding after ${max_wait} seconds"
+                    return 1
+                fi
+            done
+        else
+            # Have password, try with authentication first
+            while ! docker compose ${compose_files} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
+                sleep ${wait_interval}
+                count=$((count + 1))
+                
+                # If auth fails halfway through, try without auth
+                if [[ $count -ge $((max_attempts / 2)) ]]; then
+                    if docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+                        log_info "MongoDB connected without authentication"
+                        break
+                    fi
+                fi
+                
+                if [[ $count -ge $max_attempts ]]; then
+                    log_error "MongoDB not responding after ${max_wait} seconds"
+                    return 1
+                fi
+            done
+        fi
     else
         # Test mode - no authentication
         while ! docker compose ${compose_files} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do

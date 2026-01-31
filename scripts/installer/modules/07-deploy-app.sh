@@ -26,6 +26,13 @@ should_run() {
         log_info "Application deployment already completed"
         return 1
     fi
+    
+    # Check if environment configuration was completed
+    if ! is_step_done "configure_env"; then
+        log_warning "Module 04 (Environment Configuration) has not been completed"
+        log_warning "This may cause deployment issues if .env file is incomplete"
+    fi
+    
     return 0
 }
 
@@ -83,7 +90,41 @@ do_prepare_deployment() {
     # Ensure .env file exists
     if [[ ! -f ".env" ]]; then
         log_error ".env file not found. Please run environment configuration first."
+        log_error "Module 04 (Environment Configuration) may not have completed successfully."
         return 1
+    fi
+    
+    # Check if .env has required variables for production mode
+    local ssl_enabled
+    ssl_enabled=$(get_config "ssl_enabled" "true")
+    if [[ "${ssl_enabled}" == "true" ]]; then
+        log_info "Verifying .env file for production mode..."
+        local missing_vars=()
+        
+        if ! grep -q "^MONGO_URL=" .env; then
+            missing_vars+=("MONGO_URL")
+        fi
+        if ! grep -q "^MONGO_ADMIN_PASSWORD=" .env; then
+            missing_vars+=("MONGO_ADMIN_PASSWORD")
+        fi
+        if ! grep -q "^REDIS_PASSWORD=" .env; then
+            missing_vars+=("REDIS_PASSWORD")
+        fi
+        if ! grep -q "^JWT_SECRET=" .env; then
+            missing_vars+=("JWT_SECRET")
+        fi
+        
+        if [[ ${#missing_vars[@]} -gt 0 ]]; then
+            log_warning "Some required environment variables are missing from .env:"
+            for var in "${missing_vars[@]}"; do
+                log_warning "  - ${var}"
+            done
+            log_warning "Module 04 (Environment Configuration) may not have completed successfully."
+            log_info "Deployment will continue, but services may not work correctly."
+            echo ""
+        else
+            log_success ".env file verified for production mode"
+        fi
     fi
     
     # Determine which compose files to use
@@ -190,11 +231,6 @@ do_start_infrastructure() {
     project_dir=$(get_config "project_dir" "")
     cd "${project_dir}" || return 1
     
-    # Load .env file to get credentials
-    if [[ -f ".env" ]]; then
-        source .env
-    fi
-    
     # Stop and remove old containers to ensure they pick up new .env values
     log_info "Removing old containers if they exist..."
     docker compose ${COMPOSE_FILES} down 2>/dev/null || true
@@ -213,19 +249,45 @@ do_start_infrastructure() {
     local count=0
     if [[ "${compose_mode}" == "production" ]]; then
         # Production mode - use authentication
-        local mongo_admin_password="${MONGO_ADMIN_PASSWORD:-}"
-        if [[ -z "${mongo_admin_password}" ]]; then
-            log_error "MONGO_ADMIN_PASSWORD not found in .env file"
-            return 1
+        # Try to get password from .env file
+        local mongo_admin_password=""
+        if [[ -f ".env" ]]; then
+            mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
         fi
-        while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
-            sleep 2
-            count=$((count + 1))
-            if [[ $count -ge $max_wait ]]; then
-                log_error "MongoDB failed to start within ${max_wait} seconds"
-                return 1
-            fi
-        done
+        
+        if [[ -z "${mongo_admin_password}" ]]; then
+            log_warning "MONGO_ADMIN_PASSWORD not found in .env file"
+            log_info "Attempting to connect to MongoDB without authentication..."
+            # Try without auth (might be first-time setup before passwords are set)
+            while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+                sleep 2
+                count=$((count + 1))
+                if [[ $count -ge $max_wait ]]; then
+                    log_error "MongoDB failed to start within ${max_wait} seconds"
+                    log_error "Also, MONGO_ADMIN_PASSWORD not found in .env file"
+                    log_error "Please ensure Module 04 (Environment Configuration) completed successfully"
+                    return 1
+                fi
+            done
+        else
+            # Have password, use authentication
+            while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
+                sleep 2
+                count=$((count + 1))
+                if [[ $count -ge $((max_wait / 2)) ]]; then
+                    log_warning "MongoDB authentication failing, trying without auth..."
+                    # Maybe auth isn't set up yet, try without
+                    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+                        log_info "MongoDB connected without authentication"
+                        break
+                    fi
+                fi
+                if [[ $count -ge $max_wait ]]; then
+                    log_error "MongoDB failed to start within ${max_wait} seconds"
+                    return 1
+                fi
+            done
+        fi
     else
         # Test mode - no authentication
         while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
@@ -242,20 +304,42 @@ do_start_infrastructure() {
     # Wait for Redis
     count=0
     if [[ "${compose_mode}" == "production" ]]; then
-        # Production mode - use password
-        local redis_password="${REDIS_PASSWORD:-}"
-        if [[ -z "${redis_password}" ]]; then
-            log_error "REDIS_PASSWORD not found in .env file"
-            return 1
+        # Production mode - try to get password
+        local redis_password=""
+        if [[ -f ".env" ]]; then
+            redis_password=$(grep "^REDIS_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
         fi
-        while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli -a "${redis_password}" ping &>/dev/null; do
-            sleep 2
-            count=$((count + 1))
-            if [[ $count -ge 30 ]]; then
-                log_error "Redis failed to start"
-                return 1
-            fi
-        done
+        
+        if [[ -z "${redis_password}" ]]; then
+            log_warning "REDIS_PASSWORD not found in .env file, trying without password..."
+            # Try without password (might be first-time setup)
+            while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; do
+                sleep 2
+                count=$((count + 1))
+                if [[ $count -ge 30 ]]; then
+                    log_error "Redis failed to start"
+                    return 1
+                fi
+            done
+        else
+            # Have password, use authentication
+            while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli -a "${redis_password}" ping 2>/dev/null | grep -q PONG; do
+                sleep 2
+                count=$((count + 1))
+                if [[ $count -ge 15 ]]; then
+                    log_warning "Redis authentication failing, trying without password..."
+                    # Maybe auth isn't set up yet, try without
+                    if docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; then
+                        log_info "Redis connected without authentication"
+                        break
+                    fi
+                fi
+                if [[ $count -ge 30 ]]; then
+                    log_error "Redis failed to start"
+                    return 1
+                fi
+            done
+        fi
     else
         # Test mode - no password
         while ! docker compose ${COMPOSE_FILES} exec -T redis redis-cli ping &>/dev/null; do
