@@ -431,6 +431,7 @@ reset_state() {
 }
 
 # Reset from a specific step onwards
+# Also marks earlier pending steps as "skipped" so execution starts at the right step
 reset_from_step() {
     local start_index="$1"
     
@@ -442,12 +443,19 @@ reset_from_step() {
         local timestamp
         timestamp=$(date -Iseconds)
         
-        # Build jq command to reset steps
+        # Build jq command to:
+        # 1. Mark pending steps BEFORE start_index as "skipped"
+        # 2. Reset steps at start_index and after to "pending"
         local jq_cmd=".updated_at = \"${timestamp}\""
         
         local i=0
         for step in "${STEP_NAMES[@]}"; do
-            if [[ $i -ge $start_index ]]; then
+            if [[ $i -lt $start_index ]]; then
+                # Mark earlier steps as skipped if they are pending
+                # (preserve completed status if already completed)
+                jq_cmd+=" | if .steps.${step}.status == \"pending\" then .steps.${step}.status = \"skipped\" | .steps.${step}.completed_at = \"${timestamp}\" else . end"
+            else
+                # Reset this step and all subsequent to pending
                 jq_cmd+=" | .steps.${step}.status = \"pending\" | .steps.${step}.completed_at = \"\""
             fi
             ((i++))
@@ -465,7 +473,7 @@ reset_from_step() {
     
     release_lock
     
-    log_to_file "STATE" "Reset steps from index ${start_index}"
+    log_to_file "STATE" "Reset steps from index ${start_index} (skipped earlier pending steps)"
 }
 
 # Display resume prompt
