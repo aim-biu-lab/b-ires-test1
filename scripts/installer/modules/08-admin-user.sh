@@ -125,15 +125,18 @@ except ImportError:
     cd "${project_dir}" || return 1
     
     docker compose exec -T mongo mongosh bires --quiet --eval "
-        // Check if user exists
-        var existingUser = db.users.findOne({email: '${admin_email}'});
+        // Check if user exists by email or username
+        var existingUserByEmail = db.users.findOne({email: '${admin_email}'});
+        var existingUserByUsername = db.users.findOne({username: '${admin_username}'});
         
-        if (existingUser) {
-            // Update existing user
+        if (existingUserByEmail || existingUserByUsername) {
+            // Update existing user (by email or username)
+            var query = existingUserByEmail ? {email: '${admin_email}'} : {username: '${admin_username}'};
             db.users.updateOne(
-                {email: '${admin_email}'},
+                query,
                 {
                     \$set: {
+                        email: '${admin_email}',
                         username: '${admin_username}',
                         hashed_password: '${password_hash}',
                         role: 'admin',
