@@ -78,6 +78,9 @@ do_prepare_deployment() {
     }
     
     # Always pull latest code before building
+    # NOTE: This git reset will reset nginx config to template with DOMAIN_PLACEHOLDER.
+    # The ensure_nginx_config_updated() function in do_start_nginx() will fix this
+    # before nginx starts.
     if [[ -d ".git" ]]; then
         log_info "Pulling latest code from repository..."
         git fetch origin 2>/dev/null || true
@@ -634,6 +637,68 @@ do_start_application() {
     log_success "Application services started"
 }
 
+ensure_nginx_config_updated() {
+    local project_dir
+    project_dir=$(get_config "project_dir" "")
+    local domain
+    domain=$(get_config "domain" "")
+    local ssl_enabled
+    ssl_enabled=$(get_config "ssl_enabled" "true")
+    
+    if [[ -z "${domain}" ]]; then
+        log_error "Domain not configured. Cannot verify nginx configuration."
+        return 1
+    fi
+    
+    local nginx_conf
+    if [[ "${ssl_enabled}" == "true" ]]; then
+        nginx_conf="${project_dir}/nginx/nginx.prod.conf"
+    else
+        nginx_conf="${project_dir}/nginx/nginx.test.conf"
+    fi
+    
+    if [[ ! -f "${nginx_conf}" ]]; then
+        log_error "Nginx config file not found: ${nginx_conf}"
+        return 1
+    fi
+    
+    # Check for placeholders and fix them
+    if grep -q "DOMAIN_PLACEHOLDER" "${nginx_conf}" 2>/dev/null; then
+        log_warning "Found DOMAIN_PLACEHOLDER in nginx config - fixing..."
+        
+        # Replace DOMAIN_PLACEHOLDER with actual domain
+        run_sudo sed -i "s/DOMAIN_PLACEHOLDER/${domain}/g" "${nginx_conf}"
+        
+        # Also update server_name if it's still set to underscore
+        run_sudo sed -i "s/server_name _;/server_name ${domain} www.${domain};/g" "${nginx_conf}"
+        
+        # Verify the fix worked
+        if grep -q "DOMAIN_PLACEHOLDER" "${nginx_conf}" 2>/dev/null; then
+            log_error "Failed to replace DOMAIN_PLACEHOLDER in nginx config"
+            log_error "Please check the file manually: ${nginx_conf}"
+            return 1
+        fi
+        
+        log_success "Nginx config updated with domain: ${domain}"
+    fi
+    
+    # Verify domain is in the config
+    if ! grep -q "${domain}" "${nginx_conf}" 2>/dev/null; then
+        log_warning "Domain '${domain}' not found in nginx config - adding..."
+        
+        # Update server_name
+        run_sudo sed -i "s/server_name _;/server_name ${domain} www.${domain};/g" "${nginx_conf}"
+        
+        # Update SSL certificate paths
+        run_sudo sed -i "s|ssl_certificate /etc/letsencrypt/live/[^/]*/fullchain.pem;|ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;|g" "${nginx_conf}"
+        run_sudo sed -i "s|ssl_certificate_key /etc/letsencrypt/live/[^/]*/privkey.pem;|ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;|g" "${nginx_conf}"
+        
+        log_success "Nginx config updated with domain: ${domain}"
+    fi
+    
+    return 0
+}
+
 do_start_nginx() {
     log_info "Starting nginx..."
     
@@ -645,6 +710,12 @@ do_start_nginx() {
     ssl_enabled=$(get_config "ssl_enabled" "true")
     
     cd "${project_dir}" || return 1
+    
+    # CRITICAL: Ensure nginx config has correct domain (may have been reset by git)
+    if ! ensure_nginx_config_updated; then
+        log_error "Failed to ensure nginx config is correct"
+        return 1
+    fi
     
     # Pre-flight checks for production mode
     if [[ "${ssl_enabled}" == "true" && -n "${domain}" ]]; then
