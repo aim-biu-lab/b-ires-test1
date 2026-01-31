@@ -248,11 +248,8 @@ show_step_selection_menu() {
     echo ""
     
     local choice
-    if [[ -t 0 ]]; then
-        read -p "Enter your choice [1-3]: " choice
-    else
-        read -p "Enter your choice [1-3]: " choice < /dev/tty
-    fi
+    echo -en "Enter your choice [1-3]: "
+    read -r choice </dev/tty
     
     case "${choice}" in
         1|"")
@@ -333,11 +330,8 @@ show_step_selection() {
     echo ""
     
     local choice
-    if [[ -t 0 ]]; then
-        read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice
-    else
-        read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice < /dev/tty
-    fi
+    echo -en "Enter step number [0-${#STEP_NAMES[@]}]: "
+    read -r choice </dev/tty
     
     # Validate input
     if [[ ! "${choice}" =~ ^[0-9]+$ ]]; then
