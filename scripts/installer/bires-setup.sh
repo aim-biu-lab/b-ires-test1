@@ -233,6 +233,12 @@ execute_module() {
 
 # Show step selection menu
 show_step_selection_menu() {
+    # Check if we have terminal access
+    if ! ensure_tty; then
+        log_info "No terminal available for input, continuing with default option (continue from next incomplete step)..."
+        return 0
+    fi
+    
     echo ""
     echo -e "${FORMAT_BOLD}Installation Options:${FORMAT_RESET}"
     echo ""
@@ -242,7 +248,11 @@ show_step_selection_menu() {
     echo ""
     
     local choice
-    read -p "Enter your choice [1-3]: " choice
+    if [[ -t 0 ]]; then
+        read -p "Enter your choice [1-3]: " choice
+    else
+        read -p "Enter your choice [1-3]: " choice < /dev/tty
+    fi
     
     case "${choice}" in
         1|"")
@@ -323,7 +333,11 @@ show_step_selection() {
     echo ""
     
     local choice
-    read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice
+    if [[ -t 0 ]]; then
+        read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice
+    else
+        read -p "Enter step number [0-${#STEP_NAMES[@]}]: " choice < /dev/tty
+    fi
     
     # Validate input
     if [[ ! "${choice}" =~ ^[0-9]+$ ]]; then
