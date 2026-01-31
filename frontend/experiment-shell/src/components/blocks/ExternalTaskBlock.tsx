@@ -159,6 +159,12 @@ export default function ExternalTaskBlock({
   // Keep refs in sync with current values
   isCompletedRef.current = isCompleted
   logEventRef.current = logEvent
+  
+  // Ensure completionHandledRef is true if data indicates completion
+  // This handles cases where the component re-renders after completion
+  if (data._external_task_completed === true) {
+    completionHandledRef.current = true
+  }
 
   // Check if we're in preview mode (session ID starts with "preview-")
   const isPreviewMode = sessionId?.startsWith('preview-') ?? false
@@ -217,17 +223,27 @@ export default function ExternalTaskBlock({
     
     // Handle status changes
     const unsubStatus = socket.onStatusChange((state) => {
-      // Preserve completed state - don't allow resetting from 'completed' to another status
-      // This can happen when WebSocket reconnects or receives stale status messages
+      // Preserve completed state - once completed, NEVER allow reset to any other status
+      // This is critical because:
+      // 1. Socket reconnection sends initial 'pending' status
+      // 2. External app disconnect can trigger status updates
+      // 3. Race conditions between state updates
       setTaskState((prevState) => {
-        // If already completed (via WebSocket state, completion handler ref, or isCompleted ref),
-        // don't reset to non-completed. Use completionHandledRef as it's set synchronously
-        // in handleTaskCompleted before the React render cycle.
-        const wasCompleted = prevState.status === 'completed' || completionHandledRef.current || isCompletedRef.current
-        if (wasCompleted && state.status !== 'completed') {
-          console.log('[ExternalTask] Preserving completed state, ignoring status:', state.status)
-          return { ...prevState, ...state, status: 'completed', progress: 100 }
+        // Once completed (via any source), stay completed forever
+        if (prevState.status === 'completed') {
+          // Only update non-status fields, keep status as 'completed'
+          if (state.status !== 'completed') {
+            console.log('[ExternalTask] Preserving completed state (prevState), ignoring:', state.status)
+          }
+          return { ...state, status: 'completed', progress: 100 }
         }
+        
+        // Also check refs for cases where prevState hasn't updated yet
+        if (completionHandledRef.current && state.status !== 'completed') {
+          console.log('[ExternalTask] Preserving completed state (ref), ignoring:', state.status)
+          return { ...state, status: 'completed', progress: 100 }
+        }
+        
         return state
       })
       
@@ -268,6 +284,15 @@ export default function ExternalTaskBlock({
       socketRef.current = null
     }
   }, [taskToken, wsUrl])  // Removed logEvent - using ref instead to prevent socket recreation
+
+  // Sync taskState with data._external_task_completed
+  // This ensures the UI always reflects the saved completion state
+  useEffect(() => {
+    if (data._external_task_completed === true && taskState.status !== 'completed') {
+      console.log('[ExternalTask] Syncing state with saved completion flag')
+      setTaskState((prev) => ({ ...prev, status: 'completed', progress: 100 }))
+    }
+  }, [data._external_task_completed, taskState.status])
 
   // Initialize task on mount
   useEffect(() => {
