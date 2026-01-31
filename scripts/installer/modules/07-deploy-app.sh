@@ -224,6 +224,177 @@ do_build_images_sequential() {
     log_success "All Docker images built"
 }
 
+do_ensure_mongodb_users() {
+    # Ensures MongoDB users exist with correct credentials
+    # This handles the case where volumes exist but init scripts didn't run
+    
+    log_info "Ensuring MongoDB users are configured..."
+    
+    local project_dir
+    project_dir=$(get_config "project_dir" "")
+    cd "${project_dir}" || return 1
+    
+    # Get credentials from .env
+    local mongo_admin_password=""
+    local mongo_user=""
+    local mongo_password=""
+    
+    if [[ -f ".env" ]]; then
+        mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
+        mongo_user=$(grep "^MONGO_USER=" .env 2>/dev/null | cut -d'=' -f2-)
+        mongo_password=$(grep "^MONGO_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
+    fi
+    
+    if [[ -z "${mongo_admin_password}" || -z "${mongo_user}" || -z "${mongo_password}" ]]; then
+        log_error "MongoDB credentials not found in .env file"
+        log_error "Please ensure Module 04 (Environment Configuration) completed successfully"
+        return 1
+    fi
+    
+    # Escape special characters for use in JavaScript strings
+    # Replace backslashes first, then single quotes
+    local mongo_admin_password_escaped="${mongo_admin_password//\\/\\\\}"
+    mongo_admin_password_escaped="${mongo_admin_password_escaped//\'/\\\'}"
+    local mongo_password_escaped="${mongo_password//\\/\\\\}"
+    mongo_password_escaped="${mongo_password_escaped//\'/\\\'}"
+    local mongo_user_escaped="${mongo_user//\\/\\\\}"
+    mongo_user_escaped="${mongo_user_escaped//\'/\\\'}"
+    
+    # Check if root admin user exists and we can authenticate
+    local admin_auth_works=false
+    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; then
+        admin_auth_works=true
+        log_success "MongoDB admin authentication working"
+    fi
+    
+    # Check if we can connect without auth (fresh MongoDB or auth not enabled)
+    local no_auth_works=false
+    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+        no_auth_works=true
+    fi
+    
+    if [[ "${admin_auth_works}" == "false" && "${no_auth_works}" == "false" ]]; then
+        log_error "Cannot connect to MongoDB with or without authentication"
+        return 1
+    fi
+    
+    # If no_auth works but admin_auth doesn't, we need to set up authentication
+    if [[ "${no_auth_works}" == "true" && "${admin_auth_works}" == "false" ]]; then
+        log_info "MongoDB running without authentication, setting up users..."
+        
+        # Create admin user using environment variable to avoid shell escaping issues
+        log_info "Creating MongoDB admin user..."
+        docker compose ${COMPOSE_FILES} exec -T -e MONGO_ADMIN_PWD="${mongo_admin_password}" mongo mongosh --eval '
+            db = db.getSiblingDB("admin");
+            var adminPwd = process.env.MONGO_ADMIN_PWD;
+            try {
+                db.createUser({
+                    user: "admin",
+                    pwd: adminPwd,
+                    roles: ["root"]
+                });
+                print("Admin user created successfully");
+            } catch (e) {
+                if (e.code === 51003) {
+                    print("Admin user already exists, updating password...");
+                    db.changeUserPassword("admin", adminPwd);
+                } else {
+                    throw e;
+                }
+            }
+        ' || {
+            log_error "Failed to create MongoDB admin user"
+            return 1
+        }
+        
+        admin_auth_works=true
+    fi
+    
+    # Now create/update the application user using environment variables
+    log_info "Ensuring application user '${mongo_user}' exists..."
+    
+    # Use admin auth to create/update app user, passing credentials via env vars
+    docker compose ${COMPOSE_FILES} exec -T \
+        -e MONGO_ADMIN_PWD="${mongo_admin_password}" \
+        -e APP_USER="${mongo_user}" \
+        -e APP_PWD="${mongo_password}" \
+        mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval '
+        db = db.getSiblingDB("admin");
+        
+        var appUser = process.env.APP_USER;
+        var appPwd = process.env.APP_PWD;
+        
+        // Check if user exists
+        var userExists = db.getUsers().users.some(function(u) { return u.user === appUser; });
+        
+        if (userExists) {
+            print("User " + appUser + " exists, updating password...");
+            db.changeUserPassword(appUser, appPwd);
+        } else {
+            print("Creating user " + appUser + "...");
+            db.createUser({
+                user: appUser,
+                pwd: appPwd,
+                roles: [
+                    { role: "readWrite", db: "bires" },
+                    { role: "dbAdmin", db: "bires" }
+                ]
+            });
+        }
+        print("User " + appUser + " is ready");
+    ' || {
+        log_error "Failed to configure application user '${mongo_user}'"
+        return 1
+    }
+    
+    # Verify the application user can authenticate
+    log_info "Verifying application user can authenticate..."
+    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u "${mongo_user}" -p "${mongo_password}" --authenticationDatabase admin --eval "db.getSiblingDB('bires').stats()" &>/dev/null; then
+        log_success "Application user '${mongo_user}' authentication verified"
+    else
+        log_error "Application user '${mongo_user}' cannot authenticate"
+        log_error "This may indicate a password mismatch or permission issue"
+        return 1
+    fi
+    
+    # Create database indexes
+    log_info "Ensuring database indexes exist..."
+    docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u "${mongo_user}" -p "${mongo_password}" --authenticationDatabase admin --eval '
+        db = db.getSiblingDB("bires");
+        
+        // User indexes
+        db.users.createIndex({ email: 1 }, { unique: true });
+        db.users.createIndex({ username: 1 }, { unique: true });
+        
+        // Experiment indexes
+        db.experiments.createIndex({ experiment_id: 1 }, { unique: true });
+        db.experiments.createIndex({ owner_id: 1 });
+        db.experiments.createIndex({ status: 1 });
+        
+        // Session indexes
+        db.sessions.createIndex({ session_id: 1 }, { unique: true });
+        db.sessions.createIndex({ experiment_id: 1 });
+        db.sessions.createIndex({ user_id: 1 });
+        db.sessions.createIndex({ status: 1 });
+        
+        // Event indexes
+        db.events.createIndex({ idempotency_key: 1 }, { unique: true });
+        db.events.createIndex({ session_id: 1 });
+        db.events.createIndex({ experiment_id: 1 });
+        db.events.createIndex({ event_type: 1 });
+        db.events.createIndex({ server_timestamp: -1 });
+        
+        // Asset indexes
+        db.assets.createIndex({ asset_id: 1 }, { unique: true });
+        db.assets.createIndex({ experiment_id: 1 });
+        
+        print("Database indexes created/verified");
+    ' &>/dev/null || log_warning "Could not create all indexes (may already exist)"
+    
+    log_success "MongoDB users and database configured successfully"
+    return 0
+}
+
 do_start_infrastructure() {
     log_info "Starting infrastructure services..."
     
@@ -244,61 +415,28 @@ do_start_infrastructure() {
     local compose_mode
     compose_mode=$(get_config "compose_mode" "production")
     
-    # Wait for MongoDB
+    # Wait for MongoDB to be reachable (not necessarily authenticated yet)
     local max_wait=60
     local count=0
+    log_info "Waiting for MongoDB to start..."
+    while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
+        sleep 2
+        count=$((count + 1))
+        if [[ $count -ge $max_wait ]]; then
+            log_error "MongoDB failed to start within ${max_wait} seconds"
+            return 1
+        fi
+    done
+    log_success "MongoDB is reachable"
+    
+    # For production mode, ensure users are configured
     if [[ "${compose_mode}" == "production" ]]; then
-        # Production mode - use authentication
-        # Try to get password from .env file
-        local mongo_admin_password=""
-        if [[ -f ".env" ]]; then
-            mongo_admin_password=$(grep "^MONGO_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2-)
+        if ! do_ensure_mongodb_users; then
+            log_error "Failed to configure MongoDB users"
+            return 1
         fi
-        
-        if [[ -z "${mongo_admin_password}" ]]; then
-            log_warning "MONGO_ADMIN_PASSWORD not found in .env file"
-            log_info "Attempting to connect to MongoDB without authentication..."
-            # Try without auth (might be first-time setup before passwords are set)
-            while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
-                sleep 2
-                count=$((count + 1))
-                if [[ $count -ge $max_wait ]]; then
-                    log_error "MongoDB failed to start within ${max_wait} seconds"
-                    log_error "Also, MONGO_ADMIN_PASSWORD not found in .env file"
-                    log_error "Please ensure Module 04 (Environment Configuration) completed successfully"
-                    return 1
-                fi
-            done
-        else
-            # Have password, use authentication
-            while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh -u admin -p "${mongo_admin_password}" --authenticationDatabase admin --eval "db.adminCommand('ping')" &>/dev/null; do
-                sleep 2
-                count=$((count + 1))
-                if [[ $count -ge $((max_wait / 2)) ]]; then
-                    log_warning "MongoDB authentication failing, trying without auth..."
-                    # Maybe auth isn't set up yet, try without
-                    if docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
-                        log_info "MongoDB connected without authentication"
-                        break
-                    fi
-                fi
-                if [[ $count -ge $max_wait ]]; then
-                    log_error "MongoDB failed to start within ${max_wait} seconds"
-                    return 1
-                fi
-            done
-        fi
-    else
-        # Test mode - no authentication
-        while ! docker compose ${COMPOSE_FILES} exec -T mongo mongosh --eval "db.adminCommand('ping')" &>/dev/null; do
-            sleep 2
-            count=$((count + 1))
-            if [[ $count -ge $max_wait ]]; then
-                log_error "MongoDB failed to start within ${max_wait} seconds"
-                return 1
-            fi
-        done
     fi
+    
     log_success "MongoDB is ready"
     
     # Wait for Redis
