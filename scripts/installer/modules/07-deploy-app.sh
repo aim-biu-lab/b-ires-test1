@@ -438,6 +438,22 @@ do_start_infrastructure() {
     log_info "Removing old containers if they exist..."
     docker compose ${COMPOSE_FILES} down 2>/dev/null || true
     
+    # For fresh installs, remove old volumes to ensure credentials match
+    # This is necessary because install script generates new random passwords each time
+    # Check if mongo volume exists and has data
+    if docker volume ls -q | grep -q "bires_mongo_data"; then
+        log_warning "Found existing MongoDB data volume from previous installation"
+        log_info "Removing old data volumes to ensure clean state with new credentials..."
+        log_info "(This is expected behavior for fresh installs with newly generated passwords)"
+        
+        # Remove the data volumes
+        docker volume rm bires_mongo_data 2>/dev/null || true
+        docker volume rm bires_redis_data 2>/dev/null || true
+        docker volume rm bires_minio_data 2>/dev/null || true
+        
+        log_success "Old data volumes removed"
+    fi
+    
     # Start infrastructure services first with --force-recreate
     docker compose ${COMPOSE_FILES} up -d --force-recreate mongo redis minio minio-init
     
