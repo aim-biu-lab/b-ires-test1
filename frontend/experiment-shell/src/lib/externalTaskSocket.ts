@@ -199,13 +199,14 @@ export class ExternalTaskSocket {
 
     switch (type) {
       case 'status':
-        // Initial status from server
+        // Initial status from server (includes close_window if task was completed)
         this.updateState({
           status: payload?.status as ExternalTaskStatus,
           progress: (payload?.progress as number) || 0,
           currentStep: (payload?.current_step as string) || null,
           externalAppConnected: (payload?.external_app_connected as boolean) || false,
           data: (payload?.data as Record<string, unknown>) || null,
+          closeWindow: (payload?.close_window as boolean) || false,
         })
         break
 

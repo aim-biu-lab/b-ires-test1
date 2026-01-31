@@ -63,6 +63,7 @@ class EventType(str, Enum):
     EXTERNAL_TASK_WINDOW_CLOSED_ON_COMPLETE = "external_task_window_closed_on_complete"
     EXTERNAL_TASK_WINDOW_CLOSED_VIA_WEBSOCKET = "external_task_window_closed_via_websocket"
     EXTERNAL_TASK_WINDOW_CLOSED_VIA_POSTMESSAGE = "external_task_window_closed_via_postmessage"
+    EXTERNAL_TASK_CLOSE_WINDOW_REQUEST = "external_task_close_window_request"
     EXTERNAL_TASK_APP_CONNECTED = "external_task_app_connected"
     EXTERNAL_TASK_APP_DISCONNECTED = "external_task_app_disconnected"
     EXTERNAL_TASK_READY = "external_task_ready"

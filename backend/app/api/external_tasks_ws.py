@@ -227,7 +227,7 @@ async def handle_shell_connection(websocket: WebSocket, task_token: str,
     
     logger.info(f"Shell connected for task {task_token}")
     
-    # Send current task status
+    # Send current task status (include close_window if task is completed)
     await websocket.send_json({
         "type": "status",
         "payload": {
@@ -236,6 +236,7 @@ async def handle_shell_connection(websocket: WebSocket, task_token: str,
             "current_step": task_data.get("current_step"),
             "external_app_connected": task_data.get("external_app_connected", False),
             "data": task_data.get("data"),
+            "close_window": task_data.get("close_window", False),  # Include close_window flag
         },
         "timestamp": datetime.utcnow().isoformat(),
     })
@@ -439,15 +440,17 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
         close_window = payload.get("close_window", False)
         logger.info(f"[DEBUG] COMPLETE payload: data_keys={list(data.keys()) if data else []}, close_window={close_window}")
         
+        # Store close_window flag in Redis so it can be retrieved on shell reconnection
         await update_task_in_redis(task_token, {
             "status": ExternalTaskStatus.COMPLETED.value,
             "progress": 100,
             "data": data,
             "completed_at": now.isoformat(),
+            "close_window": close_window,  # Persist close_window flag
         })
         
         # Notify shell (include close_window flag so parent can close popup)
-        await manager.send_to_shell(task_token, {
+        shell_notified = await manager.send_to_shell(task_token, {
             "type": WSMessageType.TASK_COMPLETED.value,
             "payload": {
                 "data": data,
@@ -455,6 +458,18 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             },
             "timestamp": now.isoformat(),
         })
+        
+        logger.info(f"[DEBUG] task_completed sent to shell: success={shell_notified}, close_window={close_window}")
+        
+        # If close_window was requested but shell wasn't notified, send close command to external app
+        # so it can try to close itself via window.close() or postMessage
+        if close_window and not shell_notified:
+            logger.warning(f"[DEBUG] Shell not connected for close_window, sending close command to external app")
+            await websocket.send_json({
+                "type": WSMessageType.COMMAND.value,
+                "payload": {"command": "close"},
+                "timestamp": now.isoformat(),
+            })
         
         # Log event
         await log_event(
@@ -464,10 +479,10 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             participant_number=task_data["participant_number"],
             stage_id=task_data["stage_id"],
             event_type=EventType.EXTERNAL_TASK_COMPLETE.value,
-            payload={"data": data, "close_window": close_window},
+            payload={"data": data, "close_window": close_window, "shell_notified": shell_notified},
         )
         
-        logger.info(f"External task {task_token} completed (close_window={close_window})")
+        logger.info(f"External task {task_token} completed (close_window={close_window}, shell_notified={shell_notified})")
     
     elif msg_type == WSMessageType.COMMAND_ACK.value:
         # Command acknowledgment
@@ -515,7 +530,7 @@ async def handle_external_app_message(websocket: WebSocket, task_token: str,
             user_id=task_data["user_id"],
             participant_number=task_data["participant_number"],
             stage_id=task_data["stage_id"],
-            event_type="external_task_close_window_request",
+            event_type=EventType.EXTERNAL_TASK_CLOSE_WINDOW_REQUEST.value,
             payload={},
         )
     
