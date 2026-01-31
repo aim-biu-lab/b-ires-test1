@@ -480,6 +480,78 @@ export default function ExternalTaskBlock({
     }
   }, [error, isCompleted, hasTimedOut, taskState.externalAppConnected, isWindowOpen, isInitializing, config, onStatusChange])
 
+  // Listen for postMessage close requests from external task windows
+  // This handles cross-domain window closing when window.close() doesn't work
+  useEffect(() => {
+    // Extract origin from targetUrl to build allowed origins list
+    const getAllowedOrigins = (): string[] => {
+      const origins: string[] = [
+        'http://localhost:8080',
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:8080',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+      ]
+      
+      // Add the targetUrl's origin if it's a valid URL
+      try {
+        const url = new URL(targetUrl)
+        if (url.origin && !origins.includes(url.origin)) {
+          origins.push(url.origin)
+        }
+      } catch {
+        // targetUrl might be a relative URL or invalid, skip
+      }
+      
+      // Also add the taskUrl's origin when available
+      if (taskUrl) {
+        try {
+          const url = new URL(taskUrl)
+          if (url.origin && !origins.includes(url.origin)) {
+            origins.push(url.origin)
+          }
+        } catch {
+          // taskUrl might be invalid, skip
+        }
+      }
+      
+      return origins
+    }
+    
+    const handlePostMessage = (event: MessageEvent) => {
+      const allowedOrigins = getAllowedOrigins()
+      
+      // Validate the message is from an allowed origin
+      if (!allowedOrigins.includes(event.origin)) {
+        return // Ignore messages from unknown origins
+      }
+      
+      // Handle close request
+      if (event.data && event.data.type === 'external_task_close') {
+        console.log('[ExternalTask] Received close request from external task via postMessage')
+        
+        if (externalWindowRef.current && !externalWindowRef.current.closed) {
+          try {
+            externalWindowRef.current.close()
+            setIsWindowOpen(false)
+            logEvent('external_task_window_closed_via_postmessage', {
+              origin: event.origin,
+            })
+          } catch (e) {
+            console.log('[ExternalTask] Could not close window via postMessage handler:', e)
+          }
+        }
+      }
+    }
+    
+    window.addEventListener('message', handlePostMessage)
+    
+    return () => {
+      window.removeEventListener('message', handlePostMessage)
+    }
+  }, [targetUrl, taskUrl, logEvent])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
