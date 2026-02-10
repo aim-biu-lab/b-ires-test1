@@ -679,7 +679,7 @@ export default function ExternalTaskBlock({
         {/* Pre-open block preview */}
         {hasPreOpenBlock && (
           <div
-            className="mb-6 p-6 bg-card border border-border rounded-lg"
+            className="mb-6 p-6 bg-surface border border-border rounded-lg"
             style={{ width: preOpenBlockWidth, minWidth: '280px' }}
           >
             {config.pre_open_title && (
@@ -687,7 +687,7 @@ export default function ExternalTaskBlock({
             )}
             {config.pre_open_description && (
               <div
-                className="text-sm text-muted-foreground prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
+                className="text-sm text-text-muted prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
                 dangerouslySetInnerHTML={{ __html: config.pre_open_description }}
               />
             )}
@@ -716,18 +716,18 @@ export default function ExternalTaskBlock({
         )}
 
         <div className="space-y-6" style={{ width: config.block_width || '40%', minWidth: '280px' }}>
-          <div className="p-6 bg-card border border-border rounded-lg">
+          <div className="p-6 bg-surface border border-border rounded-lg">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-3 h-3 rounded-full bg-muted" />
-              <span className="text-sm text-muted-foreground">{config.ready_text || 'Ready to start'} (Preview)</span>
+              <div className="w-3 h-3 rounded-full bg-surface-elevated" />
+              <span className="text-sm text-text-muted">{config.ready_text || 'Ready to start'} (Preview)</span>
             </div>
             {config.ready_description && (
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-text-muted mb-4">
                 {config.ready_description}
               </p>
             )}
-            <p className="text-sm text-muted-foreground mb-4">
-              External task functionality is disabled in preview mode. In a real session, this would open an external window to: <code className="text-xs bg-muted px-1 py-0.5 rounded">{targetUrl}</code>
+            <p className="text-sm text-text-muted mb-4">
+              External task functionality is disabled in preview mode. In a real session, this would open an external window to: <code className="text-xs bg-surface-elevated px-1 py-0.5 rounded">{targetUrl}</code>
             </p>
             <button
               onClick={() => {
@@ -751,7 +751,7 @@ export default function ExternalTaskBlock({
       {/* Pre-open block (optional, shown above the main card when not completed) */}
       {hasPreOpenBlock && !isCompleted && (
         <div
-          className="mb-6 p-6 bg-card border border-border rounded-lg"
+          className="mb-6 p-6 bg-surface border border-border rounded-lg"
           style={{ width: preOpenBlockWidth, minWidth: '280px' }}
         >
           {config.pre_open_title && (
@@ -759,7 +759,7 @@ export default function ExternalTaskBlock({
           )}
           {config.pre_open_description && (
             <div
-              className="text-sm text-muted-foreground prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
+              className="text-sm text-text-muted prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
               dangerouslySetInnerHTML={{ __html: config.pre_open_description }}
             />
           )}
@@ -797,7 +797,7 @@ export default function ExternalTaskBlock({
         )}
 
         {/* Main content */}
-        <div className="p-6 bg-card border border-border rounded-lg">
+        <div className="p-6 bg-surface border border-border rounded-lg">
           {/* Status indicator */}
           <div className="flex items-center gap-3 mb-4">
             <div
@@ -808,10 +808,10 @@ export default function ExternalTaskBlock({
                   ? 'bg-primary animate-pulse'
                   : isWindowOpen
                   ? 'bg-warning'
-                  : 'bg-muted'
+                  : 'bg-surface-elevated'
               }`}
             />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-text-muted">
               {isCompleted
                 ? 'Completed'
                 : taskState.externalAppConnected
@@ -824,7 +824,7 @@ export default function ExternalTaskBlock({
 
           {/* Ready description */}
           {!isCompleted && !isWindowOpen && !taskState.externalAppConnected && config.ready_description && (
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-text-muted mb-4">
               {config.ready_description}
             </p>
           )}
@@ -832,7 +832,7 @@ export default function ExternalTaskBlock({
           {/* Progress bar */}
           {taskState.progress > 0 && !isCompleted && (
             <div className="mb-4">
-              <div className="flex justify-between text-sm text-muted-foreground mb-1">
+              <div className="flex justify-between text-sm text-text-muted mb-1">
                 <span>Progress</span>
                 <span>{taskState.progress}%</span>
               </div>
@@ -843,7 +843,7 @@ export default function ExternalTaskBlock({
                 />
               </div>
               {taskState.currentStep && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-text-muted mt-1">
                   Current step: {taskState.currentStep}
                 </p>
               )}
@@ -857,7 +857,7 @@ export default function ExternalTaskBlock({
               disabled={!taskUrl || isInitializing}
               className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
                 isWindowOpen && !externalWindowRef.current?.closed
-                  ? 'bg-muted text-muted-foreground cursor-default'
+                  ? 'bg-surface-elevated text-text-muted cursor-default'
                   : 'bg-primary text-white hover:bg-primary/90'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
@@ -871,7 +871,7 @@ export default function ExternalTaskBlock({
               <div className="p-4 bg-success/10 border border-success rounded-lg text-success">
                 <p className="font-medium">{config.completed_message}</p>
                 {taskState.data && '{}' !== JSON.stringify(taskState.data, null, 2) && (
-                  <pre className="mt-2 text-xs text-muted-foreground overflow-auto">
+                  <pre className="mt-2 text-xs text-text-muted overflow-auto">
                     {JSON.stringify(taskState.data, null, 2)}
                   </pre>
                 )}
@@ -893,7 +893,7 @@ export default function ExternalTaskBlock({
           {config.completion_mode === 'manual' && !isCompleted && (
             <button
               onClick={handleManualComplete}
-              className="mt-4 w-full py-2 px-4 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+              className="mt-4 w-full py-2 px-4 border border-border rounded-lg text-sm hover:bg-surface-elevated transition-colors"
             >
               Mark as Done
             </button>
@@ -903,7 +903,7 @@ export default function ExternalTaskBlock({
           {config.completion_mode === 'optional' && !isCompleted && (
             <button
               onClick={handleSkip}
-              className="mt-4 w-full py-2 px-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-4 w-full py-2 px-4 text-sm text-text-muted hover:text-text-primary transition-colors"
             >
               Skip this task
             </button>
@@ -911,7 +911,7 @@ export default function ExternalTaskBlock({
 
           {/* Retry info */}
           {retryCount > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground text-center">
+            <p className="mt-2 text-xs text-text-muted text-center">
               Retry attempt: {retryCount}
               {config.max_retries && config.max_retries > 0 && ` / ${config.max_retries}`}
             </p>
@@ -920,13 +920,13 @@ export default function ExternalTaskBlock({
 
         {/* Reverse control buttons (if enabled) */}
         {config.enable_reverse_control && taskState.externalAppConnected && !isCompleted && (
-          <div className="p-4 bg-muted/50 border border-border rounded-lg">
+          <div className="p-4 bg-surface-elevated/50 border border-border rounded-lg">
             <p className="text-sm font-medium mb-3">Task Controls</p>
             <div className="flex flex-wrap gap-2">
               {config.reverse_commands?.includes('restart') && (
                 <button
                   onClick={() => socketRef.current?.sendRestart()}
-                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-elevated transition-colors"
                 >
                   Restart
                 </button>
@@ -934,7 +934,7 @@ export default function ExternalTaskBlock({
               {config.reverse_commands?.includes('pause') && (
                 <button
                   onClick={() => socketRef.current?.sendPause()}
-                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-elevated transition-colors"
                 >
                   Pause
                 </button>
@@ -942,7 +942,7 @@ export default function ExternalTaskBlock({
               {config.reverse_commands?.includes('resume') && (
                 <button
                   onClick={() => socketRef.current?.sendResume()}
-                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 text-sm border border-border rounded hover:bg-surface-elevated transition-colors"
                 >
                   Resume
                 </button>
@@ -954,16 +954,16 @@ export default function ExternalTaskBlock({
         {/* Timeout dialog */}
         {showTimeoutDialog && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-card border border-border rounded-lg p-6 max-w-md mx-4">
-              <h3 className="text-lg font-semibold mb-2">Task Timed Out</h3>
-              <p className="text-muted-foreground mb-4">
+            <div className="bg-surface border border-border rounded-lg p-6 max-w-md mx-4 shadow-lg">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Task Timed Out</h3>
+              <p className="text-text-muted mb-4">
                 {config.timeout_message}
               </p>
               <div className="flex gap-3">
                 {config.allow_retry_on_timeout && canRetry && (
                   <button
                     onClick={handleRetry}
-                    className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                    className="flex-1 py-2 px-4 bg-primary text-text-inverse rounded-lg hover:bg-primary-hover transition-colors"
                   >
                     Try Again
                   </button>
@@ -974,7 +974,7 @@ export default function ExternalTaskBlock({
                       setShowTimeoutDialog(false)
                       handleSkip()
                     }}
-                    className="flex-1 py-2 px-4 border border-border rounded-lg hover:bg-muted transition-colors"
+                    className="flex-1 py-2 px-4 border border-border rounded-lg hover:bg-surface-elevated transition-colors"
                   >
                     Skip
                   </button>
