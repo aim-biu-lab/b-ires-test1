@@ -147,6 +147,13 @@ class ExternalTaskConfig(BaseModel):
     ready_text: str = "Ready to start"
     ready_description: Optional[str] = None
     
+    # Pre-open block (optional block shown above the open button)
+    pre_open_title: Optional[str] = None
+    pre_open_description: Optional[str] = None  # Supports HTML formatting
+    pre_open_block_width: Optional[str] = None  # If None, uses block_width
+    pre_open_confirmation_enabled: bool = False
+    pre_open_confirmation_text: str = "I understand"
+    
     # Block layout
     block_width: str = "40%"
     

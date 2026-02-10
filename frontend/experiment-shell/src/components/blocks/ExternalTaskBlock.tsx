@@ -42,6 +42,13 @@ interface ExternalTaskConfig {
   ready_description?: string
   continue_button_text?: string
   
+  // Pre-open block (optional block shown above the open button)
+  pre_open_title?: string
+  pre_open_description?: string  // Supports HTML formatting
+  pre_open_block_width?: string  // If not set, uses block_width
+  pre_open_confirmation_enabled?: boolean
+  pre_open_confirmation_text?: string
+  
   // Block layout
   block_width?: string
   
@@ -86,6 +93,8 @@ const DEFAULT_CONFIG: ExternalTaskConfig = {
   ready_text: 'Ready to start',
   ready_description: '',
   continue_button_text: 'Continue',
+  pre_open_confirmation_enabled: false,
+  pre_open_confirmation_text: 'I understand',
   block_width: '40%',
   pass_session_id: true,
   pass_stage_id: true,
@@ -128,6 +137,8 @@ export default function ExternalTaskBlock({
   const [retryCount, setRetryCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false)
+  const [confirmationChecked, setConfirmationChecked] = useState(false)
+  const [confirmationError, setConfirmationError] = useState(false)
   
   // Log event helper (defined early so refs can reference it)
   const logEvent = useCallback(
@@ -406,6 +417,15 @@ export default function ExternalTaskBlock({
     }
   }, [taskUrl, config, logEvent])
 
+  // Handle open button click with confirmation check
+  const handleOpenClick = useCallback(() => {
+    if (config.pre_open_confirmation_enabled && !confirmationChecked) {
+      setConfirmationError(true)
+      return
+    }
+    openExternalWindow()
+  }, [config.pre_open_confirmation_enabled, confirmationChecked, openExternalWindow])
+
   // Start timeout timer
   const startTimeoutTimer = useCallback(() => {
     if (timeoutTimerRef.current) {
@@ -643,10 +663,58 @@ export default function ExternalTaskBlock({
   // Check if can retry
   const canRetry = config.max_retries === 0 || retryCount < (config.max_retries || 3)
 
+  // Pre-open block visibility
+  const hasPreOpenBlock = !!(config.pre_open_title || config.pre_open_description)
+  
+  // Whether confirmation is required but not yet given
+  const needsConfirmation = config.pre_open_confirmation_enabled && !confirmationChecked
+
+  // Width for the pre-open block
+  const preOpenBlockWidth = config.pre_open_block_width || config.block_width || '40%'
+
   // Preview mode UI
   if (isPreviewMode) {
     return (
-      <div className="flex justify-center" style={{ marginTop: '15vh' }}>
+      <div className="flex flex-col items-center" style={{ marginTop: '5vh' }}>
+        {/* Pre-open block preview */}
+        {hasPreOpenBlock && (
+          <div
+            className="mb-6 p-6 bg-card border border-border rounded-lg"
+            style={{ width: preOpenBlockWidth, minWidth: '280px' }}
+          >
+            {config.pre_open_title && (
+              <h3 className="text-lg font-semibold mb-3">{config.pre_open_title}</h3>
+            )}
+            {config.pre_open_description && (
+              <div
+                className="text-sm text-muted-foreground prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: config.pre_open_description }}
+              />
+            )}
+            {config.pre_open_confirmation_enabled && (
+              <div className={`mt-4 pt-4 border-t transition-colors ${confirmationError && !confirmationChecked ? 'border-error' : 'border-border'}`}>
+                <label className={`flex items-start gap-3 cursor-pointer select-none rounded-lg p-3 -m-3 transition-colors ${confirmationError && !confirmationChecked ? 'bg-error/10' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={confirmationChecked}
+                    onChange={(e) => {
+                      setConfirmationChecked(e.target.checked)
+                      if (e.target.checked) setConfirmationError(false)
+                    }}
+                    className={`mt-0.5 h-5 w-5 rounded border-2 text-primary focus:ring-primary shrink-0 transition-colors ${confirmationError && !confirmationChecked ? 'border-error' : 'border-border'}`}
+                  />
+                  <span className={`text-sm font-medium ${confirmationError && !confirmationChecked ? 'text-error' : ''}`}>
+                    {config.pre_open_confirmation_text || 'I understand'}
+                  </span>
+                </label>
+                {confirmationError && !confirmationChecked && (
+                  <p className="text-xs text-error mt-2 ml-8">Please confirm before proceeding</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="space-y-6" style={{ width: config.block_width || '40%', minWidth: '280px' }}>
           <div className="p-6 bg-card border border-border rounded-lg">
             <div className="flex items-center gap-3 mb-4">
@@ -662,7 +730,12 @@ export default function ExternalTaskBlock({
               External task functionality is disabled in preview mode. In a real session, this would open an external window to: <code className="text-xs bg-muted px-1 py-0.5 rounded">{targetUrl}</code>
             </p>
             <button
-              disabled
+              onClick={() => {
+                if (needsConfirmation) {
+                  setConfirmationError(true)
+                  return
+                }
+              }}
               className="w-full py-3 px-6 rounded-lg font-medium bg-primary text-white cursor-not-allowed opacity-50"
             >
               {config.button_text || 'Open Task'} (Preview)
@@ -674,7 +747,46 @@ export default function ExternalTaskBlock({
   }
 
   return (
-    <div className="flex justify-center" style={{ marginTop: '15vh' }}>
+    <div className="flex flex-col items-center" style={{ marginTop: '5vh' }}>
+      {/* Pre-open block (optional, shown above the main card when not completed) */}
+      {hasPreOpenBlock && !isCompleted && (
+        <div
+          className="mb-6 p-6 bg-card border border-border rounded-lg"
+          style={{ width: preOpenBlockWidth, minWidth: '280px' }}
+        >
+          {config.pre_open_title && (
+            <h3 className="text-lg font-semibold mb-3">{config.pre_open_title}</h3>
+          )}
+          {config.pre_open_description && (
+            <div
+              className="text-sm text-muted-foreground prose prose-sm max-w-none [&_a]:text-primary [&_a]:underline"
+              dangerouslySetInnerHTML={{ __html: config.pre_open_description }}
+            />
+          )}
+          {config.pre_open_confirmation_enabled && (
+            <div className={`mt-4 pt-4 border-t transition-colors ${confirmationError && !confirmationChecked ? 'border-error' : 'border-border'}`}>
+              <label className={`flex items-start gap-3 cursor-pointer select-none rounded-lg p-3 -m-3 transition-colors ${confirmationError && !confirmationChecked ? 'bg-error/10' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={confirmationChecked}
+                  onChange={(e) => {
+                    setConfirmationChecked(e.target.checked)
+                    if (e.target.checked) setConfirmationError(false)
+                  }}
+                  className={`mt-0.5 h-5 w-5 rounded border-2 text-primary focus:ring-primary shrink-0 transition-colors ${confirmationError && !confirmationChecked ? 'border-error' : 'border-border'}`}
+                />
+                <span className={`text-sm font-medium ${confirmationError && !confirmationChecked ? 'text-error' : ''}`}>
+                  {config.pre_open_confirmation_text || 'I understand'}
+                </span>
+              </label>
+              {confirmationError && !confirmationChecked && (
+                <p className="text-xs text-error mt-2 ml-8">Please confirm before proceeding</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-6" style={{ width: config.block_width || '40%', minWidth: '280px' }}>
         {/* Error display */}
         {error && (
@@ -741,7 +853,7 @@ export default function ExternalTaskBlock({
           {/* Open button - hide when completed or readOnly */}
           {!isCompleted && !readOnly && (
             <button
-              onClick={openExternalWindow}
+              onClick={handleOpenClick}
               disabled={!taskUrl || isInitializing}
               className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
                 isWindowOpen && !externalWindowRef.current?.closed

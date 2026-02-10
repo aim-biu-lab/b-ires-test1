@@ -193,5 +193,5 @@ stages:
         required: true
         row: 8
         width: "full"
-        consentUrl: "./consent_form.html"
+        consentContent: "<h2>Consent Form</h2><p>By participating in this study, you agree to the following terms...</p><p>Your participation is voluntary and you may withdraw at any time without penalty.</p>"
         consentLinkText: "consent form"

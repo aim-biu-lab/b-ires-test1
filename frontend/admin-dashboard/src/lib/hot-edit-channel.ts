@@ -166,7 +166,7 @@ export class HotEditChannel {
 
   constructor(experimentId: string) {
     this.experimentId = experimentId
-    this.shellBaseUrl = import.meta.env.VITE_SHELL_URL || 'http://localhost:3000'
+    this.shellBaseUrl = import.meta.env.VITE_SHELL_URL || window.location.origin
   }
 
   /**

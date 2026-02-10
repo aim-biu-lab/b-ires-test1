@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { FieldConfig } from '../../store/sessionStore'
 import clsx from 'clsx'
 
@@ -259,39 +260,7 @@ function UserInfoField({ field, value, error, onChange, readOnly = false, requir
         )
 
       case 'consent':
-        return (
-          <div className={clsx('flex items-start gap-3', readOnly && 'opacity-70')} style={inputStyle}>
-            <input
-              type="checkbox"
-              checked={Boolean(value)}
-              onChange={(e) => !readOnly && onChange(e.target.checked)}
-              className={clsx(
-                'mt-1.5 w-4 h-4 rounded text-primary focus:ring-primary flex-shrink-0',
-                error && 'ring-2 ring-error',
-                readOnly && 'cursor-not-allowed'
-              )}
-              disabled={readOnly}
-            />
-            <span className="text-text-primary leading-relaxed">
-              {field.consentUrl ? (
-                <>
-                  {field.label.split(field.consentLinkText || 'consent form')[0]}
-                  <a
-                    href={field.consentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline hover:text-primary-hover"
-                  >
-                    {field.consentLinkText || 'consent form'}
-                  </a>
-                  {field.label.split(field.consentLinkText || 'consent form')[1]}
-                </>
-              ) : (
-                field.label
-              )}
-            </span>
-          </div>
-        )
+        return <ConsentField field={field} value={value} onChange={onChange} error={error} readOnly={readOnly} inputStyle={inputStyle} />
 
       case 'phone':
         return (
@@ -393,5 +362,121 @@ function UserInfoField({ field, value, error, onChange, readOnly = false, requir
       {/* Error message */}
       {error && <p className="text-sm text-error">{error}</p>}
     </div>
+  )
+}
+
+// Consent field with modal popup for consent content
+function ConsentField({
+  field,
+  value,
+  onChange,
+  error,
+  readOnly,
+  inputStyle,
+}: {
+  field: FieldConfig
+  value: unknown
+  onChange: (value: unknown) => void
+  error?: string
+  readOnly: boolean
+  inputStyle?: React.CSSProperties
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const linkText = field.consentLinkText || 'consent form'
+  const hasContent = Boolean(field.consentContent)
+
+  const renderLabel = () => {
+    if (!hasContent) {
+      return field.label
+    }
+
+    const parts = field.label.split(linkText)
+    if (parts.length < 2) {
+      // Link text not found in label, render label with appended link
+      return (
+        <>
+          {field.label}{' '}
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="text-primary underline hover:text-primary-hover"
+          >
+            {linkText}
+          </button>
+        </>
+      )
+    }
+
+    return (
+      <>
+        {parts[0]}
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="text-primary underline hover:text-primary-hover"
+        >
+          {linkText}
+        </button>
+        {parts[1]}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <div className={clsx('flex items-start gap-3', readOnly && 'opacity-70')} style={inputStyle}>
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(e) => !readOnly && onChange(e.target.checked)}
+          className={clsx(
+            'mt-1.5 w-4 h-4 rounded text-primary focus:ring-primary flex-shrink-0',
+            error && 'ring-2 ring-error',
+            readOnly && 'cursor-not-allowed'
+          )}
+          disabled={readOnly}
+        />
+        <span className="text-text-primary leading-relaxed">
+          {renderLabel()}
+        </span>
+      </div>
+
+      {/* Consent content modal */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsModalOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" />
+
+          {/* Modal */}
+          <div
+            className="relative bg-surface rounded-xl shadow-2xl w-[60vw] max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-surface-elevated hover:bg-border text-text-secondary hover:text-text-primary transition-colors"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            {/* Content */}
+            <div
+              className="p-6 pt-12 overflow-y-auto prose prose-sm max-w-none text-text-primary"
+              dangerouslySetInnerHTML={{ __html: field.consentContent || '' }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

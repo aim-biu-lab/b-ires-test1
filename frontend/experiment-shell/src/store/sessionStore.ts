@@ -51,7 +51,7 @@ export interface FieldConfig {
   helpText?: string          // Helper text displayed below the field
   headerText?: string        // Header/title text displayed above the field
   // Consent checkbox specific
-  consentUrl?: string        // URL for consent form link
+  consentContent?: string    // HTML content to display in the consent popup
   consentLinkText?: string   // Text for the consent link (e.g., "consent form")
   // Participant identity specific
   enabled?: boolean          // Whether field is shown (default: true)
