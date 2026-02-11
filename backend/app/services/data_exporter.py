@@ -280,6 +280,48 @@ class DataExporter:
         
         return columns
     
+    def _get_assignment_columns(self, sessions: List[Dict[str, Any]]) -> List[str]:
+        """Discover all unique assignment keys across sessions, in stable order."""
+        seen = set()
+        ordered = []
+        for session in sessions:
+            for key in session.get("assignments", {}).keys():
+                if key.startswith("_"):
+                    continue  # Skip internal keys like _pick_assignments
+                if key not in seen:
+                    seen.add(key)
+                    ordered.append(key)
+        return ordered
+    
+    def _build_event_map(
+        self,
+        events: List[Dict[str, Any]],
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+        """
+        Build a map of session_id -> stage_id -> [event_payloads].
+        Only includes events that have payloads with actual data.
+        """
+        event_map: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+        for event in events:
+            session_id = event.get("session_id")
+            stage_id = event.get("stage_id")
+            if not session_id or not stage_id:
+                continue
+            
+            payload = event.get("payload", {})
+            entry = {
+                "event_type": event.get("event_type"),
+                "payload": payload,
+            }
+            # Include timestamp if available
+            ts = event.get("client_timestamp") or event.get("server_timestamp")
+            if ts:
+                entry["timestamp"] = ts.isoformat() if hasattr(ts, 'isoformat') else str(ts)
+            
+            event_map.setdefault(session_id, {}).setdefault(stage_id, []).append(entry)
+        
+        return event_map
+    
     def to_wide_csv(
         self,
         sessions: List[Dict[str, Any]],
@@ -287,13 +329,14 @@ class DataExporter:
         excluded_field_ids: Optional[Set[str]] = None,
         include_correct_answer: bool = False,
         include_is_correct: bool = False,
+        include_event_payloads: bool = False,
+        include_assignments: bool = False,
+        events: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """
         Export data in wide format (1 row per participant).
-        Columns: session_id, user_id, status, created_at, completed_at, [stage_field columns]
-        
-        Columns are determined from both config metadata AND actual session data,
-        so all stage types (including external_task, iframe, etc.) are covered.
+        Columns: session_id, user_id, status, created_at, completed_at,
+                 [assignments], [stage_field columns], [event_payload columns]
         """
         if not sessions:
             return ""
@@ -303,6 +346,12 @@ class DataExporter:
         
         # Determine columns from stage configurations
         base_columns = ["session_id", "user_id", "status", "created_at", "completed_at"]
+        
+        # Assignment columns (right after base)
+        assignment_columns = []
+        if include_assignments:
+            assignment_columns = [f"assignment.{k}" for k in self._get_assignment_columns(sessions)]
+        
         field_columns = []
         config_columns_set = set()
         
@@ -346,7 +395,6 @@ class DataExporter:
                         field_columns.append(col)
                         config_columns_set.add(col)
                 
-                # Add enrichment columns for stages with correct_answer
                 if correct_answer is not None:
                     if include_correct_answer and "correct_answer" not in excluded_field_ids:
                         col = f"{stage_id}.correct_answer"
@@ -358,7 +406,6 @@ class DataExporter:
                         config_columns_set.add(col)
             
             else:
-                # Fallback for unknown types - add response if it's not excluded
                 if "response" not in excluded_field_ids:
                     col = f"{stage_id}.response"
                     field_columns.append(col)
@@ -370,7 +417,21 @@ class DataExporter:
             if col_name not in config_columns_set:
                 field_columns.append(col_name)
         
-        columns = base_columns + field_columns
+        # Event payload columns (at the end)
+        event_payload_columns = []
+        event_map = {}
+        if include_event_payloads and events:
+            event_map = self._build_event_map(events)
+            # Discover which stages have events
+            event_stage_ids = set()
+            for session_events in event_map.values():
+                event_stage_ids.update(session_events.keys())
+            for sid in sorted(event_stage_ids):
+                if stage_filter and sid not in stage_filter:
+                    continue
+                event_payload_columns.append(f"{sid}._event_payloads")
+        
+        columns = base_columns + assignment_columns + field_columns + event_payload_columns
         columns_set = set(columns)
         
         # Build rows
@@ -379,13 +440,24 @@ class DataExporter:
         writer.writeheader()
         
         for session in sessions:
+            session_id = session.get("session_id")
             row = {
-                "session_id": session.get("session_id"),
+                "session_id": session_id,
                 "user_id": session.get("user_id"),
                 "status": session.get("status"),
                 "created_at": session.get("created_at", "").isoformat() if session.get("created_at") else "",
                 "completed_at": session.get("completed_at", "").isoformat() if session.get("completed_at") else "",
             }
+            
+            # Fill assignment columns
+            if include_assignments:
+                assignments = session.get("assignments", {})
+                for key, value in assignments.items():
+                    if key.startswith("_"):
+                        continue
+                    col_name = f"assignment.{key}"
+                    if col_name in columns_set:
+                        row[col_name] = str(value)
             
             # Fill in data fields
             session_data = session.get("data", {})
@@ -405,12 +477,10 @@ class DataExporter:
                         
                         col_name = f"{stage_id}.{field_id}"
                         if col_name in columns_set:
-                            # Format selected_answers for single-select
                             if field_id == "selected_answers":
                                 value = self._format_selected_answers(stage_id, value)
                             row[col_name] = self._format_value(value)
                     
-                    # Add enrichment columns
                     if correct_answer is not None:
                         answer_value = stage_data.get("selected_answers") or stage_data.get("selected_answer") or stage_data.get("response")
                         
@@ -432,6 +502,13 @@ class DataExporter:
                         if col_name in columns_set:
                             row[col_name] = self._format_value(stage_data)
             
+            # Fill event payload columns
+            if include_event_payloads and session_id and session_id in event_map:
+                for stage_id, stage_events in event_map[session_id].items():
+                    col_name = f"{stage_id}._event_payloads"
+                    if col_name in columns_set:
+                        row[col_name] = json.dumps(stage_events)
+            
             writer.writerow(row)
         
         return output.getvalue()
@@ -443,6 +520,9 @@ class DataExporter:
         excluded_field_ids: Optional[Set[str]] = None,
         include_correct_answer: bool = False,
         include_is_correct: bool = False,
+        include_event_payloads: bool = False,
+        include_assignments: bool = False,
+        events: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """
         Export data in long format (1 row per response).
@@ -451,6 +531,9 @@ class DataExporter:
         
         correct_answer and is_correct are added as extra columns (not rows)
         so each response row has the answer alongside it for easy counting.
+        
+        Assignments are added as rows with stage_id="_assignments".
+        Event payloads are added as rows with field_id="_event_payloads".
         """
         if excluded_field_ids is None:
             excluded_field_ids = set()
@@ -466,11 +549,31 @@ class DataExporter:
         writer = csv.DictWriter(output, fieldnames=csv_columns)
         writer.writeheader()
         
+        # Build event map if needed
+        event_map = {}
+        if include_event_payloads and events:
+            event_map = self._build_event_map(events)
+        
         for session in sessions:
             session_id = session.get("session_id")
             user_id = session.get("user_id")
             session_data = session.get("data", {})
             stage_progress = session.get("stage_progress", {})
+            
+            # Write assignment rows first
+            if include_assignments:
+                assignments = session.get("assignments", {})
+                for key, value in assignments.items():
+                    if key.startswith("_"):
+                        continue
+                    writer.writerow({
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "stage_id": "_assignments",
+                        "field_id": key,
+                        "value": str(value),
+                        "completed_at": "",
+                    })
             
             for stage_id, stage_data in session_data.items():
                 if stage_filter and stage_id not in stage_filter:
@@ -502,7 +605,6 @@ class DataExporter:
                         if field_id in excluded_field_ids:
                             continue
                         
-                        # Format selected_answers for single-select
                         if field_id == "selected_answers":
                             value = self._format_selected_answers(stage_id, value)
                         
@@ -514,7 +616,6 @@ class DataExporter:
                             "value": self._format_value(value),
                             "completed_at": completed_at,
                         }
-                        # Add enrichment columns to every row of this stage
                         row.update(enrichment)
                         writer.writerow(row)
                 else:
@@ -529,6 +630,21 @@ class DataExporter:
                         }
                         row.update(enrichment)
                         writer.writerow(row)
+                
+                # Event payloads row for this stage
+                if include_event_payloads and session_id and session_id in event_map:
+                    stage_events = event_map[session_id].get(stage_id)
+                    if stage_events:
+                        row = {
+                            "session_id": session_id,
+                            "user_id": user_id,
+                            "stage_id": stage_id,
+                            "field_id": "_event_payloads",
+                            "value": json.dumps(stage_events),
+                            "completed_at": completed_at,
+                        }
+                        row.update(enrichment)
+                        writer.writerow(row)
         
         return output.getvalue()
     
@@ -537,15 +653,24 @@ class DataExporter:
         sessions: List[Dict[str, Any]],
         include_correct_answer: bool = False,
         include_is_correct: bool = False,
+        include_assignments: bool = False,
+        include_event_payloads: bool = False,
+        events: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Enrich JSON session data with correct_answer and is_correct fields.
         Also formats selected_answers for single-select questions.
         """
+        # Build event map if needed
+        event_map = {}
+        if include_event_payloads and events:
+            event_map = self._build_event_map(events)
+        
         enriched = []
         
         for session in sessions:
             session_copy = dict(session)
+            session_id = session.get("session_id")
             session_data = session_copy.get("data", {})
             enriched_data = {}
             
@@ -573,11 +698,24 @@ class DataExporter:
                         if include_is_correct:
                             enriched_stage["is_correct"] = self._check_is_correct(stage_id, answer_value)
                     
+                    # Add event payloads for this stage
+                    if include_event_payloads and session_id and session_id in event_map:
+                        stage_events = event_map[session_id].get(stage_id)
+                        if stage_events:
+                            enriched_stage["_event_payloads"] = stage_events
+                    
                     enriched_data[stage_id] = enriched_stage
                 else:
                     enriched_data[stage_id] = stage_data
             
             session_copy["data"] = enriched_data
+            
+            # Add assignments at the session level
+            if include_assignments:
+                raw_assignments = session.get("assignments", {})
+                clean_assignments = {k: v for k, v in raw_assignments.items() if not k.startswith("_")}
+                session_copy["assignments"] = clean_assignments
+            
             enriched.append(session_copy)
         
         return enriched

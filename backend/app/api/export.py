@@ -69,11 +69,14 @@ async def export_csv(
     excluded_field_ids: Optional[str] = Query(None, description="Comma-separated field IDs to exclude from output"),
     include_correct_answer: bool = Query(False, description="Add correct_answer column for stages that have it configured"),
     include_is_correct: bool = Query(False, description="Add is_correct (1/0) column for stages that have correct_answer configured"),
+    include_event_payloads: bool = Query(False, description="Include aggregated event payloads per stage as a JSON column"),
+    include_assignments: bool = Query(False, description="Include participant assignments (counterbalancing, picks)"),
     current_user: UserInDB = Depends(require_researcher),
 ):
     """Export experiment data as CSV"""
     experiments = get_collection("experiments")
     sessions = get_collection("sessions")
+    events_coll = get_collection("events")
     
     # Verify experiment access
     exp_doc = await experiments.find_one({"experiment_id": experiment_id})
@@ -127,6 +130,15 @@ async def export_csv(
             detail="No sessions found matching the criteria"
         )
     
+    # Fetch events if needed
+    event_docs = []
+    if include_event_payloads and session_docs:
+        session_ids = [s["session_id"] for s in session_docs]
+        event_cursor = events_coll.find(
+            {"session_id": {"$in": session_ids}}
+        ).sort("server_timestamp", 1)
+        event_docs = await event_cursor.to_list(length=None)
+    
     # Generate CSV
     exporter = DataExporter(exp_doc["config"])
     
@@ -137,6 +149,9 @@ async def export_csv(
             excluded_field_ids=excluded_set,
             include_correct_answer=include_correct_answer,
             include_is_correct=include_is_correct,
+            include_event_payloads=include_event_payloads,
+            include_assignments=include_assignments,
+            events=event_docs,
         )
     else:
         csv_content = exporter.to_long_csv(
@@ -145,6 +160,9 @@ async def export_csv(
             excluded_field_ids=excluded_set,
             include_correct_answer=include_correct_answer,
             include_is_correct=include_is_correct,
+            include_event_payloads=include_event_payloads,
+            include_assignments=include_assignments,
+            events=event_docs,
         )
     
     filename = f"{experiment_id}_{format}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -165,6 +183,8 @@ async def export_json(
     include_incomplete: bool = Query(False, description="Include sessions that have not completed the experiment"),
     include_correct_answer: bool = Query(False, description="Add correct_answer field for stages that have it configured"),
     include_is_correct: bool = Query(False, description="Add is_correct (1/0) field for stages that have correct_answer configured"),
+    include_event_payloads: bool = Query(False, description="Include aggregated event payloads per stage"),
+    include_assignments: bool = Query(False, description="Include participant assignments (counterbalancing, picks)"),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     last_n: Optional[int] = Query(None, ge=1, description="Only include the last N sessions (by creation time)"),
@@ -218,12 +238,24 @@ async def export_json(
         cursor = sessions.find(query).sort("created_at", 1)
         session_docs = await cursor.to_list(length=None)
     
-    # Enrich session data with correct_answer/is_correct
+    # Fetch events for enrichment if needed
+    enrichment_event_docs = []
+    if include_event_payloads and session_docs:
+        session_ids = [s["session_id"] for s in session_docs]
+        enrich_cursor = events.find(
+            {"session_id": {"$in": session_ids}}
+        ).sort("server_timestamp", 1)
+        enrichment_event_docs = await enrich_cursor.to_list(length=None)
+    
+    # Enrich session data
     exporter = DataExporter(exp_doc["config"])
     enriched_sessions = exporter.enrich_json_sessions(
         session_docs,
         include_correct_answer=include_correct_answer,
         include_is_correct=include_is_correct,
+        include_assignments=include_assignments,
+        include_event_payloads=include_event_payloads,
+        events=enrichment_event_docs,
     )
     
     result = {
@@ -244,6 +276,9 @@ async def export_json(
             "created_at": session_doc["created_at"].isoformat(),
             "completed_at": session_doc.get("completed_at", "").isoformat() if session_doc.get("completed_at") else None,
         }
+        
+        if include_assignments:
+            session_data["assignments"] = session_doc.get("assignments", {})
         
         if include_events:
             event_cursor = events.find(

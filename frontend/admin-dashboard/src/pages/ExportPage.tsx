@@ -37,6 +37,8 @@ export default function ExportPage() {
   const [includeIncomplete, setIncludeIncomplete] = useState(false)
   const [includeCorrectAnswer, setIncludeCorrectAnswer] = useState(false)
   const [includeIsCorrect, setIncludeIsCorrect] = useState(false)
+  const [includeEventPayloads, setIncludeEventPayloads] = useState(false)
+  const [includeAssignments, setIncludeAssignments] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedStages, setSelectedStages] = useState<string[]>([])
@@ -143,6 +145,8 @@ export default function ExportPage() {
       if (includeIncomplete) params.append('include_incomplete', 'true')
       if (includeCorrectAnswer) params.append('include_correct_answer', 'true')
       if (includeIsCorrect) params.append('include_is_correct', 'true')
+      if (includeEventPayloads) params.append('include_event_payloads', 'true')
+      if (includeAssignments) params.append('include_assignments', 'true')
       if (lastN) params.append('last_n', lastN)
       if (lastMinutesPreset) params.append('last_minutes', lastMinutesPreset)
 
@@ -251,6 +255,8 @@ export default function ExportPage() {
                   setFieldIdToggles({})
                   setIncludeCorrectAnswer(false)
                   setIncludeIsCorrect(false)
+                  setIncludeEventPayloads(false)
+                  setIncludeAssignments(false)
                 }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
@@ -386,6 +392,45 @@ export default function ExportPage() {
                   </label>
                 </>
               )}
+
+              {/* Additional Data */}
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Additional Data
+                </p>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeAssignments}
+                  onChange={(e) => setIncludeAssignments(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Include assignments
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Show which scenario/variant each participant was assigned (counterbalancing, picks)
+                  </p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeEventPayloads}
+                  onChange={(e) => setIncludeEventPayloads(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Include event payloads
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Include aggregated event log data per stage (e.g., chat messages, task interactions)
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 
