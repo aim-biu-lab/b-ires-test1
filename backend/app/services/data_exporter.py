@@ -9,6 +9,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Fields to always exclude from export (truly redundant internal state)
+ALWAYS_SKIP_FIELD_IDS = {"_submitted"}
+
 # Field IDs that are disabled by default in export filters
 DEFAULT_DISABLED_FIELD_IDS = {"selected_answers", "free_text_values"}
 
@@ -17,7 +20,11 @@ STAGE_TYPE_FIELDS = {
     "multiple_choice": ["response", "selected_answers"],
     "likert_scale": ["response"],
     "consent_form": ["response"],
-    "attention_check": ["selected_answer"],
+    "attention_check": ["response", "_passed", "_failed", "_attempts", "_attempts_to_pass", "_disqualified"],
+    "external_task": ["_external_task_completed", "_external_task_completion_time", "_external_task_data",
+                      "_external_task_timed_out", "_external_task_manual_complete", "_external_task_skipped"],
+    "iframe_sandbox": ["_iframe_completed", "_iframe_completion_time", "_iframe_timed_out"],
+    "video_player": ["_video_completed"],
 }
 
 # Enrichment field IDs (derived from config, not session data)
@@ -80,6 +87,10 @@ class DataExporter:
         """Flatten nested stages (backward compatibility alias)"""
         return self._flatten_all(stages)
     
+    def _should_skip_field(self, field_id: str) -> bool:
+        """Check if a field should be always skipped (truly redundant internal state)."""
+        return field_id in ALWAYS_SKIP_FIELD_IDS
+    
     def _get_stage_correct_answer(self, stage_id: str) -> Optional[Any]:
         """Get the correct answer for a stage from its config, if defined."""
         stage = self.stage_map.get(stage_id)
@@ -138,9 +149,44 @@ class DataExporter:
             return value[0] if value else ""
         return value
     
+    def _discover_columns_from_data(
+        self,
+        sessions: List[Dict[str, Any]],
+        stage_filter: Optional[List[str]] = None,
+        excluded_field_ids: Optional[Set[str]] = None,
+    ) -> List[str]:
+        """
+        Scan session data to discover all unique {stage_id}.{field_id} columns.
+        Returns columns NOT already known from config, in stable order.
+        """
+        if excluded_field_ids is None:
+            excluded_field_ids = set()
+        
+        seen = set()
+        ordered = []
+        
+        for session in sessions:
+            session_data = session.get("data", {})
+            for stage_id, stage_data in session_data.items():
+                if stage_filter and stage_id not in stage_filter:
+                    continue
+                if isinstance(stage_data, dict):
+                    for field_id in stage_data.keys():
+                        if self._should_skip_field(field_id):
+                            continue
+                        if field_id in excluded_field_ids:
+                            continue
+                        col_name = f"{stage_id}.{field_id}"
+                        if col_name not in seen:
+                            seen.add(col_name)
+                            ordered.append(col_name)
+        
+        return ordered
+    
     def get_available_columns(
         self,
         stage_filter: Optional[List[str]] = None,
+        sessions: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get all available columns with metadata for the export filter UI.
@@ -152,6 +198,7 @@ class DataExporter:
         - default_enabled: whether this column should be enabled by default
         """
         columns = []
+        known_columns = set()
         
         # Base columns (always available)
         for base_col in ["session_id", "user_id", "status", "created_at", "completed_at"]:
@@ -189,8 +236,10 @@ class DataExporter:
             
             # Add data columns
             for field_id in field_ids:
+                col_name = f"{stage_id}.{field_id}"
+                known_columns.add(col_name)
                 columns.append({
-                    "column": f"{stage_id}.{field_id}",
+                    "column": col_name,
                     "stage_id": stage_id,
                     "field_id": field_id,
                     "category": "data",
@@ -214,6 +263,21 @@ class DataExporter:
                     "default_enabled": False,
                 })
         
+        # If session data is provided, discover additional columns not in config
+        if sessions:
+            discovered = self._discover_columns_from_data(sessions, stage_filter)
+            for col_name in discovered:
+                if col_name not in known_columns:
+                    parts = col_name.split(".", 1)
+                    if len(parts) == 2:
+                        columns.append({
+                            "column": col_name,
+                            "stage_id": parts[0],
+                            "field_id": parts[1],
+                            "category": "data",
+                            "default_enabled": parts[1] not in DEFAULT_DISABLED_FIELD_IDS,
+                        })
+        
         return columns
     
     def to_wide_csv(
@@ -227,6 +291,9 @@ class DataExporter:
         """
         Export data in wide format (1 row per participant).
         Columns: session_id, user_id, status, created_at, completed_at, [stage_field columns]
+        
+        Columns are determined from both config metadata AND actual session data,
+        so all stage types (including external_task, iframe, etc.) are covered.
         """
         if not sessions:
             return ""
@@ -234,9 +301,10 @@ class DataExporter:
         if excluded_field_ids is None:
             excluded_field_ids = set()
         
-        # Determine all possible columns from stage configurations
+        # Determine columns from stage configurations
         base_columns = ["session_id", "user_id", "status", "created_at", "completed_at"]
         field_columns = []
+        config_columns_set = set()
         
         for stage in self._flatten_stages(self.stages):
             stage_id = stage.get("id")
@@ -251,37 +319,59 @@ class DataExporter:
                 for q in stage.get("questions", []):
                     field_id = q["id"]
                     if field_id not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.{field_id}")
-                    # Add correct_answer/is_correct after each question if applicable
+                        col = f"{stage_id}.{field_id}"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
                     if include_correct_answer and correct_answer is not None and "correct_answer" not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.{field_id}.correct_answer")
+                        col = f"{stage_id}.{field_id}.correct_answer"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
                     if include_is_correct and correct_answer is not None and "is_correct" not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.{field_id}.is_correct")
+                        col = f"{stage_id}.{field_id}.is_correct"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
             
             elif stage_type == "user_info":
                 for f in stage.get("fields", []):
                     field_id = f["field"]
                     if field_id not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.{field_id}")
+                        col = f"{stage_id}.{field_id}"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
             
             elif stage_type in STAGE_TYPE_FIELDS:
                 for field_id in STAGE_TYPE_FIELDS[stage_type]:
                     if field_id not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.{field_id}")
+                        col = f"{stage_id}.{field_id}"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
                 
                 # Add enrichment columns for stages with correct_answer
                 if correct_answer is not None:
                     if include_correct_answer and "correct_answer" not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.correct_answer")
+                        col = f"{stage_id}.correct_answer"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
                     if include_is_correct and "is_correct" not in excluded_field_ids:
-                        field_columns.append(f"{stage_id}.is_correct")
+                        col = f"{stage_id}.is_correct"
+                        field_columns.append(col)
+                        config_columns_set.add(col)
             
             else:
-                # Fallback for unknown types
+                # Fallback for unknown types - add response if it's not excluded
                 if "response" not in excluded_field_ids:
-                    field_columns.append(f"{stage_id}.response")
+                    col = f"{stage_id}.response"
+                    field_columns.append(col)
+                    config_columns_set.add(col)
+        
+        # Discover additional columns from session data not covered by config
+        discovered = self._discover_columns_from_data(sessions, stage_filter, excluded_field_ids)
+        for col_name in discovered:
+            if col_name not in config_columns_set:
+                field_columns.append(col_name)
         
         columns = base_columns + field_columns
+        columns_set = set(columns)
         
         # Build rows
         output = io.StringIO()
@@ -304,18 +394,17 @@ class DataExporter:
                 if stage_filter and stage_id not in stage_filter:
                     continue
                 
-                stage_type = self.stage_map.get(stage_id, {}).get("type")
                 correct_answer = self._get_stage_correct_answer(stage_id)
                 
                 if isinstance(stage_data, dict):
                     for field_id, value in stage_data.items():
-                        if field_id.startswith("_"):
+                        if self._should_skip_field(field_id):
                             continue
                         if field_id in excluded_field_ids:
                             continue
                         
                         col_name = f"{stage_id}.{field_id}"
-                        if col_name in columns:
+                        if col_name in columns_set:
                             # Format selected_answers for single-select
                             if field_id == "selected_answers":
                                 value = self._format_selected_answers(stage_id, value)
@@ -323,12 +412,11 @@ class DataExporter:
                     
                     # Add enrichment columns
                     if correct_answer is not None:
-                        # Get the answer field for correctness check
                         answer_value = stage_data.get("selected_answers") or stage_data.get("selected_answer") or stage_data.get("response")
                         
                         if include_correct_answer and "correct_answer" not in excluded_field_ids:
                             ca_col = f"{stage_id}.correct_answer"
-                            if ca_col in columns:
+                            if ca_col in columns_set:
                                 formatted_ca = correct_answer
                                 if isinstance(formatted_ca, list) and len(formatted_ca) == 1:
                                     formatted_ca = formatted_ca[0]
@@ -336,12 +424,12 @@ class DataExporter:
                         
                         if include_is_correct and "is_correct" not in excluded_field_ids:
                             ic_col = f"{stage_id}.is_correct"
-                            if ic_col in columns:
+                            if ic_col in columns_set:
                                 row[ic_col] = self._check_is_correct(stage_id, answer_value)
                 else:
                     if "response" not in excluded_field_ids:
                         col_name = f"{stage_id}.response"
-                        if col_name in columns:
+                        if col_name in columns_set:
                             row[col_name] = self._format_value(stage_data)
             
             writer.writerow(row)
@@ -409,8 +497,8 @@ class DataExporter:
                 
                 if isinstance(stage_data, dict):
                     for field_id, value in stage_data.items():
-                        if field_id.startswith("_"):
-                            continue  # Skip internal fields
+                        if self._should_skip_field(field_id):
+                            continue
                         if field_id in excluded_field_ids:
                             continue
                         

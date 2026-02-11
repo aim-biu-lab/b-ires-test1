@@ -27,6 +27,7 @@ async def get_export_columns(
 ):
     """Get available columns/field_ids for export filtering UI"""
     experiments = get_collection("experiments")
+    sessions = get_collection("sessions")
     
     exp_doc = await experiments.find_one({"experiment_id": experiment_id})
     if not exp_doc:
@@ -43,7 +44,14 @@ async def get_export_columns(
     
     stage_filter = stages.split(",") if stages else None
     exporter = DataExporter(exp_doc["config"])
-    columns = exporter.get_available_columns(stage_filter)
+    
+    # Fetch a small sample of sessions to discover data-driven columns
+    sample_cursor = sessions.find(
+        {"experiment_id": experiment_id}
+    ).sort("created_at", -1).limit(10)
+    sample_sessions = await sample_cursor.to_list(length=10)
+    
+    columns = exporter.get_available_columns(stage_filter, sessions=sample_sessions)
     
     return {"columns": columns}
 
