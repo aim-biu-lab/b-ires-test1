@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 
@@ -16,17 +16,45 @@ interface ExportStats {
   stage_completions: Record<string, number>
 }
 
+interface ColumnDescriptor {
+  column: string
+  stage_id: string | null
+  field_id: string
+  category: 'base' | 'data' | 'enrichment'
+  default_enabled: boolean
+}
+
+interface ColumnsResponse {
+  columns: ColumnDescriptor[]
+}
+
 type ExportFormat = 'csv_wide' | 'csv_long' | 'json' | 'events'
 
 export default function ExportPage() {
   const [selectedExperiment, setSelectedExperiment] = useState<string>('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('csv_wide')
   const [includeEvents, setIncludeEvents] = useState(false)
+  const [includeIncomplete, setIncludeIncomplete] = useState(false)
+  const [includeCorrectAnswer, setIncludeCorrectAnswer] = useState(false)
+  const [includeIsCorrect, setIncludeIsCorrect] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [selectedStages, setSelectedStages] = useState<string[]>([])
+  const [fieldIdToggles, setFieldIdToggles] = useState<Record<string, boolean>>({})
+  const [lastN, setLastN] = useState<string>('')
+  const [lastMinutesPreset, setLastMinutesPreset] = useState<string>('')
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+
+  const TIME_WINDOW_PRESETS = [
+    { label: 'All time', value: '' },
+    { label: 'Last 10 min', value: '10' },
+    { label: 'Last 30 min', value: '30' },
+    { label: 'Last 1 hour', value: '60' },
+    { label: 'Last 2 hours', value: '120' },
+    { label: 'Last 6 hours', value: '360' },
+    { label: 'Last 24 hours', value: '1440' },
+  ] as const
 
   // Fetch experiments
   const { data: experiments, isLoading: experimentsLoading } = useQuery({
@@ -37,6 +65,13 @@ export default function ExportPage() {
     },
   })
 
+  // Auto-select first experiment when experiments load
+  useEffect(() => {
+    if (experiments && experiments.length > 0 && !selectedExperiment) {
+      setSelectedExperiment(experiments[0].experiment_id)
+    }
+  }, [experiments, selectedExperiment])
+
   // Fetch export stats when experiment is selected
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['exportStats', selectedExperiment],
@@ -46,6 +81,51 @@ export default function ExportPage() {
     },
     enabled: !!selectedExperiment,
   })
+
+  // Fetch available columns when experiment is selected
+  const { data: columnsData } = useQuery({
+    queryKey: ['exportColumns', selectedExperiment],
+    queryFn: async () => {
+      const response = await api.get(`/export/${selectedExperiment}/columns`)
+      return response.data as ColumnsResponse
+    },
+    enabled: !!selectedExperiment,
+  })
+
+  // Initialize field_id toggles from columns metadata
+  useEffect(() => {
+    if (columnsData?.columns) {
+      const uniqueFieldIds = new Map<string, boolean>()
+      
+      for (const col of columnsData.columns) {
+        if (col.category === 'base') continue
+        if (col.category === 'enrichment') continue // Handled by separate toggles
+        
+        if (!uniqueFieldIds.has(col.field_id)) {
+          uniqueFieldIds.set(col.field_id, col.default_enabled)
+        }
+      }
+      
+      const newToggles: Record<string, boolean> = {}
+      uniqueFieldIds.forEach((defaultEnabled, fieldId) => {
+        newToggles[fieldId] = defaultEnabled
+      })
+      
+      setFieldIdToggles(newToggles)
+    }
+  }, [columnsData])
+
+  // Check if any stage has correct_answer configured
+  const hasCorrectAnswerStages = columnsData?.columns.some(
+    (col) => col.category === 'enrichment' && col.field_id === 'correct_answer'
+  ) ?? false
+
+  // Get excluded field_ids from toggles
+  const getExcludedFieldIds = (): string[] => {
+    return Object.entries(fieldIdToggles)
+      .filter(([, enabled]) => !enabled)
+      .map(([fieldId]) => fieldId)
+  }
 
   const handleExport = async () => {
     if (!selectedExperiment) return
@@ -59,6 +139,13 @@ export default function ExportPage() {
       if (startDate) params.append('start_date', new Date(startDate).toISOString())
       if (endDate) params.append('end_date', new Date(endDate).toISOString())
 
+      // Common params
+      if (includeIncomplete) params.append('include_incomplete', 'true')
+      if (includeCorrectAnswer) params.append('include_correct_answer', 'true')
+      if (includeIsCorrect) params.append('include_is_correct', 'true')
+      if (lastN) params.append('last_n', lastN)
+      if (lastMinutesPreset) params.append('last_minutes', lastMinutesPreset)
+
       let endpoint = ''
       let filename = ''
 
@@ -66,12 +153,20 @@ export default function ExportPage() {
         case 'csv_wide':
           params.append('format', 'wide')
           if (selectedStages.length > 0) params.append('stages', selectedStages.join(','))
+          {
+            const excluded = getExcludedFieldIds()
+            if (excluded.length > 0) params.append('excluded_field_ids', excluded.join(','))
+          }
           endpoint = `/export/${selectedExperiment}/csv`
           filename = `${selectedExperiment}_wide.csv`
           break
         case 'csv_long':
           params.append('format', 'long')
           if (selectedStages.length > 0) params.append('stages', selectedStages.join(','))
+          {
+            const excluded = getExcludedFieldIds()
+            if (excluded.length > 0) params.append('excluded_field_ids', excluded.join(','))
+          }
           endpoint = `/export/${selectedExperiment}/csv`
           filename = `${selectedExperiment}_long.csv`
           break
@@ -104,8 +199,21 @@ export default function ExportPage() {
       window.URL.revokeObjectURL(url)
     } catch (error: unknown) {
       console.error('Export error:', error)
-      const axiosError = error as { response?: { data?: { detail?: string } } }
-      setExportError(axiosError.response?.data?.detail || 'Export failed. Please try again.')
+      const axiosError = error as { response?: { data?: Blob | { detail?: string } } }
+      
+      // Handle blob error responses
+      if (axiosError.response?.data instanceof Blob) {
+        try {
+          const text = await axiosError.response.data.text()
+          const parsed = JSON.parse(text)
+          setExportError(parsed.detail || 'Export failed. Please try again.')
+        } catch {
+          setExportError('Export failed. Please try again.')
+        }
+      } else {
+        const detail = (axiosError.response?.data as { detail?: string })?.detail
+        setExportError(detail || 'Export failed. Please try again.')
+      }
     } finally {
       setIsExporting(false)
     }
@@ -140,6 +248,9 @@ export default function ExportPage() {
                 onChange={(e) => {
                   setSelectedExperiment(e.target.value)
                   setSelectedStages([])
+                  setFieldIdToggles({})
+                  setIncludeCorrectAnswer(false)
+                  setIncludeIsCorrect(false)
                 }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
@@ -208,13 +319,122 @@ export default function ExportPage() {
             )}
           </div>
 
+          {/* Session & Enrichment Options */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Data Options
+            </h2>
+
+            <div className="space-y-3">
+              {/* Include Incomplete Sessions */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeIncomplete}
+                  onChange={(e) => setIncludeIncomplete(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Include incomplete sessions
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Include participants who have not completed the entire experiment
+                  </p>
+                </div>
+              </label>
+
+              {/* Correct Answer Enrichment */}
+              {hasCorrectAnswerStages && (
+                <>
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Answer Enrichment
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeCorrectAnswer}
+                      onChange={(e) => setIncludeCorrectAnswer(e.target.checked)}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Include correct answer
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Add a column with the correct answer from the experiment config
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeIsCorrect}
+                      onChange={(e) => setIncludeIsCorrect(e.target.checked)}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Include correctness indicator
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Add a column with 1 (correct) or 0 (incorrect) comparing the response to the correct answer
+                      </p>
+                    </div>
+                  </label>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Filters (Optional)
+              Filters
             </h2>
 
             <div className="space-y-4">
+              {/* Session Limit */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last N Sessions
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="All"
+                    value={lastN}
+                    onChange={(e) => setLastN(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Empty = all sessions
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Time Window
+                  </label>
+                  <select
+                    value={lastMinutesPreset}
+                    onChange={(e) => setLastMinutesPreset(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    {TIME_WINDOW_PRESETS.map((preset) => (
+                      <option key={preset.value} value={preset.value}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Only sessions created within this window
+                  </p>
+                </div>
+              </div>
+
               {/* Date Range */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -275,6 +495,41 @@ export default function ExportPage() {
                   )}
                 </div>
               )}
+
+              {/* Field ID Filter (for CSV formats) */}
+              {(exportFormat === 'csv_wide' || exportFormat === 'csv_long') &&
+                Object.keys(fieldIdToggles).length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Field Filter
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Toggle which fields to include in the export
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(fieldIdToggles)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([fieldId, enabled]) => (
+                          <button
+                            key={fieldId}
+                            onClick={() => {
+                              setFieldIdToggles((prev) => ({
+                                ...prev,
+                                [fieldId]: !prev[fieldId],
+                              }))
+                            }}
+                            className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                              enabled
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                                : 'bg-gray-50 border-gray-200 text-gray-400 line-through'
+                            }`}
+                          >
+                            {fieldId}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
             </div>
           </div>
 
@@ -486,6 +741,3 @@ function SpinnerIcon({ className }: { className?: string }) {
     </svg>
   )
 }
-
-
-

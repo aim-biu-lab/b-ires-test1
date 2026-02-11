@@ -19,6 +19,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/{experiment_id}/columns")
+async def get_export_columns(
+    experiment_id: str,
+    stages: Optional[str] = Query(None, description="Comma-separated stage IDs to include"),
+    current_user: UserInDB = Depends(require_researcher),
+):
+    """Get available columns/field_ids for export filtering UI"""
+    experiments = get_collection("experiments")
+    
+    exp_doc = await experiments.find_one({"experiment_id": experiment_id})
+    if not exp_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Experiment not found"
+        )
+    
+    if current_user.role != UserRole.ADMIN and exp_doc["owner_id"] != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    stage_filter = stages.split(",") if stages else None
+    exporter = DataExporter(exp_doc["config"])
+    columns = exporter.get_available_columns(stage_filter)
+    
+    return {"columns": columns}
+
+
 @router.get("/{experiment_id}/csv")
 async def export_csv(
     experiment_id: str,
@@ -26,6 +55,12 @@ async def export_csv(
     stages: Optional[str] = Query(None, description="Comma-separated stage IDs to include"),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    last_n: Optional[int] = Query(None, ge=1, description="Only include the last N sessions (by creation time)"),
+    last_minutes: Optional[int] = Query(None, ge=1, description="Only include sessions from the last N minutes"),
+    include_incomplete: bool = Query(False, description="Include sessions that have not completed the experiment"),
+    excluded_field_ids: Optional[str] = Query(None, description="Comma-separated field IDs to exclude from output"),
+    include_correct_answer: bool = Query(False, description="Add correct_answer column for stages that have it configured"),
+    include_is_correct: bool = Query(False, description="Add is_correct (1/0) column for stages that have correct_answer configured"),
     current_user: UserInDB = Depends(require_researcher),
 ):
     """Export experiment data as CSV"""
@@ -47,36 +82,62 @@ async def export_csv(
         )
     
     # Build query
-    query = {"experiment_id": experiment_id, "status": "completed"}
+    query = {"experiment_id": experiment_id}
     
-    if start_date:
-        query["created_at"] = {"$gte": start_date}
-    if end_date:
-        if "created_at" in query:
-            query["created_at"]["$lte"] = end_date
-        else:
-            query["created_at"] = {"$lte": end_date}
+    if not include_incomplete:
+        query["status"] = "completed"
     
-    # Parse stage filter
+    # Time window filter (last_minutes overrides start_date)
+    if last_minutes:
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(minutes=last_minutes)
+        query["created_at"] = {"$gte": cutoff}
+    else:
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        if end_date:
+            if "created_at" in query:
+                query["created_at"]["$lte"] = end_date
+            else:
+                query["created_at"] = {"$lte": end_date}
+    
+    # Parse filters
     stage_filter = stages.split(",") if stages else None
+    excluded_set = set(excluded_field_ids.split(",")) if excluded_field_ids else None
     
-    # Get sessions
-    cursor = sessions.find(query).sort("created_at", 1)
-    session_docs = await cursor.to_list(length=None)
+    # Get sessions - if last_n, sort descending to get the N most recent, then reverse
+    if last_n:
+        cursor = sessions.find(query).sort("created_at", -1).limit(last_n)
+        session_docs = list(reversed(await cursor.to_list(length=last_n)))
+    else:
+        cursor = sessions.find(query).sort("created_at", 1)
+        session_docs = await cursor.to_list(length=None)
     
     if not session_docs:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No completed sessions found"
+            detail="No sessions found matching the criteria"
         )
     
     # Generate CSV
     exporter = DataExporter(exp_doc["config"])
     
     if format == "wide":
-        csv_content = exporter.to_wide_csv(session_docs, stage_filter)
+        csv_content = exporter.to_wide_csv(
+            session_docs,
+            stage_filter,
+            excluded_field_ids=excluded_set,
+            include_correct_answer=include_correct_answer,
+            include_is_correct=include_is_correct,
+        )
     else:
-        csv_content = exporter.to_long_csv(session_docs, stage_filter)
+        csv_content = exporter.to_long_csv(
+            session_docs,
+            stage_filter,
+            excluded_field_ids=excluded_set,
+            include_correct_answer=include_correct_answer,
+            include_is_correct=include_is_correct,
+        )
     
     filename = f"{experiment_id}_{format}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
     
@@ -93,8 +154,13 @@ async def export_csv(
 async def export_json(
     experiment_id: str,
     include_events: bool = Query(False),
+    include_incomplete: bool = Query(False, description="Include sessions that have not completed the experiment"),
+    include_correct_answer: bool = Query(False, description="Add correct_answer field for stages that have it configured"),
+    include_is_correct: bool = Query(False, description="Add is_correct (1/0) field for stages that have correct_answer configured"),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
+    last_n: Optional[int] = Query(None, ge=1, description="Only include the last N sessions (by creation time)"),
+    last_minutes: Optional[int] = Query(None, ge=1, description="Only include sessions from the last N minutes"),
     current_user: UserInDB = Depends(require_researcher),
 ):
     """Export experiment data as JSON"""
@@ -119,27 +185,48 @@ async def export_json(
     # Build query
     query = {"experiment_id": experiment_id}
     
-    if start_date:
-        query["created_at"] = {"$gte": start_date}
-    if end_date:
-        if "created_at" in query:
-            query["created_at"]["$lte"] = end_date
-        else:
-            query["created_at"] = {"$lte": end_date}
+    if not include_incomplete:
+        query["status"] = "completed"
     
-    # Get sessions
-    cursor = sessions.find(query).sort("created_at", 1)
-    session_docs = await cursor.to_list(length=None)
+    # Time window filter (last_minutes overrides start_date)
+    if last_minutes:
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(minutes=last_minutes)
+        query["created_at"] = {"$gte": cutoff}
+    else:
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        if end_date:
+            if "created_at" in query:
+                query["created_at"]["$lte"] = end_date
+            else:
+                query["created_at"] = {"$lte": end_date}
+    
+    # Get sessions - if last_n, sort descending to get the N most recent, then reverse
+    if last_n:
+        cursor = sessions.find(query).sort("created_at", -1).limit(last_n)
+        session_docs = list(reversed(await cursor.to_list(length=last_n)))
+    else:
+        cursor = sessions.find(query).sort("created_at", 1)
+        session_docs = await cursor.to_list(length=None)
+    
+    # Enrich session data with correct_answer/is_correct
+    exporter = DataExporter(exp_doc["config"])
+    enriched_sessions = exporter.enrich_json_sessions(
+        session_docs,
+        include_correct_answer=include_correct_answer,
+        include_is_correct=include_is_correct,
+    )
     
     result = {
         "experiment_id": experiment_id,
         "experiment_name": exp_doc["name"],
         "exported_at": datetime.utcnow().isoformat(),
-        "session_count": len(session_docs),
+        "session_count": len(enriched_sessions),
         "sessions": []
     }
     
-    for session_doc in session_docs:
+    for session_doc in enriched_sessions:
         session_data = {
             "session_id": session_doc["session_id"],
             "user_id": session_doc["user_id"],
@@ -311,6 +398,3 @@ async def export_events(
         "event_count": len(result),
         "events": result,
     }
-
-
-
