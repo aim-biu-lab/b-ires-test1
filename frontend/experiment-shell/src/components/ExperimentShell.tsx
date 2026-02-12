@@ -265,14 +265,16 @@ export default function ExperimentShell() {
 
   const handleFieldChange = (fieldId: string, value: unknown) => {
     setStageData(currentStage.id, fieldId, value)
-    // Clear validation error for this field
-    if (validationErrors[fieldId]) {
-      setValidationErrors((prev) => {
+    // Clear validation error for this field using functional update
+    // to avoid stale closure issues (e.g. WebSocket callbacks)
+    setValidationErrors((prev) => {
+      if (prev[fieldId]) {
         const next = { ...prev }
         delete next[fieldId]
         return next
-      })
-    }
+      }
+      return prev
+    })
   }
 
   const validateStage = (): { isValid: boolean; errors: Record<string, string> } => {
@@ -324,6 +326,14 @@ export default function ExperimentShell() {
       const requireCompletion = currentStage.config?.require_completion !== false
       if (requireCompletion && !currentStageData._iframe_completed) {
         errors._iframe_completed = 'Please complete the task before continuing'
+      }
+    }
+
+    // Validate external_task stages - require completion unless completion_mode is 'optional'
+    if (currentStage.type === 'external_task') {
+      const completionMode = currentStage.config?.completion_mode || 'required'
+      if (completionMode === 'required' && !currentStageData._external_task_completed) {
+        errors._external_task_completed = 'Please complete the external task before continuing'
       }
     }
 
